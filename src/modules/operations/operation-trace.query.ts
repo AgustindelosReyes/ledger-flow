@@ -38,7 +38,12 @@ export class OperationTraceQuery {
             entries: { orderBy: { id: 'asc' }, include: { account: { select: { code: true } } } },
           },
         },
-        invoice: { include: { attempts: { orderBy: { attemptNumber: 'asc' } } } },
+        invoice: {
+          include: {
+            attempts: { orderBy: { attemptNumber: 'asc' } },
+            corrections: { orderBy: { createdAt: 'asc' } },
+          },
+        },
       },
     });
     if (payment === null) {
@@ -104,6 +109,14 @@ export class OperationTraceQuery {
                 response: attempt.response,
                 durationMs: attempt.durationMs,
                 createdAt: attempt.createdAt.toISOString(),
+              })),
+              corrections: invoice.corrections.map((correction) => ({
+                field: correction.field,
+                previousValue: correction.previousValue,
+                newValue: correction.newValue,
+                reason: correction.reason,
+                correlationId: correction.correlationId,
+                createdAt: correction.createdAt.toISOString(),
               })),
             },
       queue: invoice === null ? { jobs: [], deadLetter: null } : await this.queueState(invoice.id),

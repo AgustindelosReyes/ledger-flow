@@ -102,6 +102,26 @@ export class TraceInvoiceAttemptDto {
   createdAt!: string;
 }
 
+export class TraceInvoiceCorrectionDto {
+  @ApiProperty({ example: 'payerTaxId' })
+  field!: string;
+
+  @ApiProperty({ ...nullable, type: String })
+  previousValue!: string | null;
+
+  @ApiProperty()
+  newValue!: string;
+
+  @ApiProperty({ ...nullable, type: String })
+  reason!: string | null;
+
+  @ApiProperty({ description: 'correlationId del request administrativo que la aplicó' })
+  correlationId!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  createdAt!: string;
+}
+
 export class TraceInvoiceDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -147,6 +167,12 @@ export class TraceInvoiceDto {
 
   @ApiProperty({ type: [TraceInvoiceAttemptDto] })
   attempts!: TraceInvoiceAttemptDto[];
+
+  @ApiProperty({
+    type: [TraceInvoiceCorrectionDto],
+    description: 'Correcciones manuales de datos fiscales aplicadas desde la DLQ',
+  })
+  corrections!: TraceInvoiceCorrectionDto[];
 }
 
 export class TraceQueueJobDto {

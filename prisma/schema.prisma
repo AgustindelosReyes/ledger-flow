@@ -241,8 +241,9 @@ model Invoice {
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  payment  Payment          @relation(fields: [paymentId], references: [id], onDelete: Restrict)
-  attempts InvoiceAttempt[]
+  payment     Payment             @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  attempts    InvoiceAttempt[]
+  corrections InvoiceCorrection[]
 
   /// La numeración fiscal no puede repetirse (NULLs no colisionan mientras no se emite).
   @@unique([pointOfSale, type, number], map: "invoices_point_of_sale_type_number_key")
@@ -271,6 +272,25 @@ model InvoiceAttempt {
 
   @@index([invoiceId, createdAt])
   @@map("invoice_attempts")
+}
+
+/// Bitácora append-only de correcciones manuales de datos fiscales, aplicadas al reencolar
+/// una factura desde la DLQ. Responde quién cambió qué, cuándo y por qué.
+model InvoiceCorrection {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  invoiceId     String   @map("invoice_id") @db.Uuid
+  field         String   @db.VarChar(64)
+  previousValue String?  @map("previous_value") @db.VarChar(200)
+  newValue      String   @map("new_value") @db.VarChar(200)
+  reason        String?  @db.VarChar(500)
+  /// correlationId del request administrativo que aplicó la corrección.
+  correlationId String   @map("correlation_id") @db.VarChar(64)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([invoiceId, createdAt])
+  @@map("invoice_corrections")
 }
 
 // ─────────────────────── Transactional outbox ───────────────────────

@@ -312,6 +312,148 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
     });
   });
 
+  describe('dead letter retry with corrected fiscal data', () => {
+    /** Pago cuya factura A cae en la DLQ porque el ente rechaza el CUIT (400). */
+    async function deadLetterByInvalidCuit(amount: string): Promise<AcceptedAck> {
+      const ack = await pay(amount, { name: 'ACME SA', taxId: INVALID_CUIT });
+      await waitForInvoice(ack.paymentId, 'DEAD_LETTERED');
+      return ack;
+    }
+
+    const correctionsOf = (invoiceId: string): Promise<number> =>
+      t.prisma.invoiceCorrection.count({ where: { invoiceId } });
+
+    it('rescues an invoice rejected for an invalid CUIT, recording the correction', async () => {
+      const ack = await deadLetterByInvalidCuit('7260.00');
+      const adminCorrelationId = `e2e-admin-${randomUUID()}`;
+
+      const response = await retry(ack.invoiceId)
+        .set('x-correlation-id', adminCorrelationId)
+        .send({ payerTaxId: VALID_CUIT, reason: 'Typo confirmed by support, ticket #4821' })
+        .expect(202);
+
+      expect(retryAcceptedOf(response).correction).toEqual({
+        field: 'payerTaxId',
+        previousValue: INVALID_CUIT,
+        newValue: VALID_CUIT,
+        invoiceType: 'A',
+      });
+
+      const trace = await waitForInvoice(ack.paymentId, 'ISSUED');
+      expect(trace.invoice?.type).toBe('A');
+      expect(trace.invoice?.cae).toMatch(/^\d{14}$/);
+      expect(trace.invoice?.attempts.map((attempt) => attempt.outcome)).toEqual([
+        'PERMANENT_FAILURE',
+        'SUCCEEDED',
+      ]);
+
+      // Auditoría: qué cambió, por qué y qué request administrativo lo hizo.
+      expect(trace.invoice?.corrections).toHaveLength(1);
+      expect(trace.invoice?.corrections[0]).toMatchObject({
+        field: 'payerTaxId',
+        previousValue: INVALID_CUIT,
+        newValue: VALID_CUIT,
+        reason: 'Typo confirmed by support, ticket #4821',
+        correlationId: adminCorrelationId,
+      });
+
+      // El pago refleja el dato corregido; el payload original del webhook no se altera.
+      const payment = await t.prisma.payment.findUniqueOrThrow({
+        where: { id: ack.paymentId },
+        include: { webhookEvent: true },
+      });
+      expect(payment.payerTaxId).toBe(VALID_CUIT);
+      expect(JSON.stringify(payment.webhookEvent.payload)).toContain(INVALID_CUIT);
+    });
+
+    it('converts the invoice to type B when the payer is corrected to a DNI', async () => {
+      const ack = await deadLetterByInvalidCuit('7270.00');
+
+      const response = await retry(ack.invoiceId).send({ payerTaxId: '30111222' }).expect(202);
+
+      expect(retryAcceptedOf(response).correction).toMatchObject({ invoiceType: 'B' });
+      const trace = await waitForInvoice(ack.paymentId, 'ISSUED');
+      expect(trace.invoice?.type).toBe('B');
+      expect(trace.invoice?.corrections[0]?.reason).toBeNull();
+    });
+
+    it('rejects with 422 a correction whose CUIT has a wrong check digit, changing nothing', async () => {
+      const ack = await deadLetterByInvalidCuit('7280.00');
+
+      const response = await retry(ack.invoiceId).send({ payerTaxId: '20123456789' }).expect(422);
+
+      expect(problemOf(response)).toMatchObject({
+        type: '/problems/invalid-fiscal-correction',
+        status: 422,
+      });
+      const trace = await getTrace(ack.paymentId);
+      expect(trace.invoice?.status).toBe('DEAD_LETTERED');
+      expect(trace.queue.jobs).toHaveLength(1);
+      expect(await correctionsOf(ack.invoiceId)).toBe(0);
+      const payment = await t.prisma.payment.findUniqueOrThrow({ where: { id: ack.paymentId } });
+      expect(payment.payerTaxId).toBe(INVALID_CUIT);
+      // Sigue en la DLQ, disponible para un nuevo intento de corrección.
+      expect((await listDeadLetters()).map((item) => item.invoiceId)).toContain(ack.invoiceId);
+    });
+
+    it.each([
+      ['a malformed tax id', { payerTaxId: '30-71234567-1' }, 'payerTaxId'],
+      ['an unknown property', { payerTaxId: VALID_CUIT, status: 'ISSUED' }, 'status'],
+      ['an empty reason', { payerTaxId: VALID_CUIT, reason: '' }, 'reason'],
+    ])('rejects with 400 a body with %s', async (_case, body, field) => {
+      const ack = await deadLetterByInvalidCuit(
+        `73${String(Math.floor(Math.random() * 90) + 10)}.${String(Math.floor(Math.random() * 90) + 10)}`,
+      );
+
+      const response = await retry(ack.invoiceId).send(body).expect(400);
+
+      expect(problemOf(response).errors).toEqual([expect.objectContaining({ field })]);
+      expect((await getTrace(ack.paymentId)).invoice?.status).toBe('DEAD_LETTERED');
+      expect(await correctionsOf(ack.invoiceId)).toBe(0);
+    });
+
+    it('applies neither the correction nor the requeue when the invoice is not dead-lettered', async () => {
+      const ack = await pay('7290.00', { name: 'ACME SA', taxId: VALID_CUIT });
+      await waitForInvoice(ack.paymentId, 'ISSUED');
+
+      await retry(ack.invoiceId).send({ payerTaxId: '30111222' }).expect(409);
+
+      const trace = await getTrace(ack.paymentId);
+      expect(trace.invoice).toMatchObject({ status: 'ISSUED', type: 'A', corrections: [] });
+      const payment = await t.prisma.payment.findUniqueOrThrow({ where: { id: ack.paymentId } });
+      expect(payment.payerTaxId).toBe(VALID_CUIT);
+    });
+
+    it('applies a single correction when the same retry is sent concurrently', async () => {
+      const ack = await deadLetterByInvalidCuit('7295.00');
+
+      const responses = await Promise.all(
+        Array.from({ length: 5 }, () => retry(ack.invoiceId).send({ payerTaxId: VALID_CUIT })),
+      );
+
+      expect(responses.map((response) => response.status).sort()).toEqual([
+        202, 409, 409, 409, 409,
+      ]);
+      await waitForInvoice(ack.paymentId, 'ISSUED');
+      expect(await correctionsOf(ack.invoiceId)).toBe(1);
+    });
+
+    it('keeps the correction log append-only at the database level', async () => {
+      const ack = await deadLetterByInvalidCuit('7297.00');
+      await retry(ack.invoiceId).send({ payerTaxId: VALID_CUIT }).expect(202);
+
+      await expect(
+        t.prisma.invoiceCorrection.updateMany({
+          where: { invoiceId: ack.invoiceId },
+          data: { newValue: 'tampered' },
+        }),
+      ).rejects.toThrow(/append-only/);
+      await expect(
+        t.prisma.invoiceCorrection.deleteMany({ where: { invoiceId: ack.invoiceId } }),
+      ).rejects.toThrow(/append-only/);
+    });
+  });
+
   describe('worker guards', () => {
     it('does not call the fiscal authority again for an invoice that is already issued', async () => {
       const ack = await pay('6050.00');

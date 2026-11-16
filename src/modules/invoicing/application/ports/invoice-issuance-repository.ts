@@ -30,8 +30,30 @@ export interface AttemptRecord {
   readonly response: JsonObject | null;
 }
 
+/** Corrección de datos fiscales ya validada, a aplicar junto con el reencolado. */
+export interface FiscalDataCorrection {
+  readonly payerTaxId: string;
+  /** Clase de comprobante que corresponde al nuevo identificador fiscal. */
+  readonly invoiceType: InvoiceType;
+  readonly reason: string | undefined;
+  /** correlationId del request administrativo, para la bitácora de auditoría. */
+  readonly requestCorrelationId: string;
+}
+
+export interface AppliedCorrection {
+  readonly field: 'payerTaxId';
+  readonly previousValue: string | null;
+  readonly newValue: string;
+  readonly invoiceType: InvoiceType;
+}
+
 export type RequeueOutcome =
-  | { readonly kind: 'requeued'; readonly outboxEventId: string; readonly correlationId: string }
+  | {
+      readonly kind: 'requeued';
+      readonly outboxEventId: string;
+      readonly correlationId: string;
+      readonly correction: AppliedCorrection | null;
+    }
   | { readonly kind: 'not_found' }
   | { readonly kind: 'not_dead_lettered'; readonly status: InvoiceStatus };
 
@@ -65,6 +87,12 @@ export abstract class InvoiceIssuanceRepository {
   /**
    * Reencolado manual: `DEAD_LETTERED -> PENDING` y un nuevo mensaje de outbox, en una
    * única transacción. Dos llamadas concurrentes no pueden reencolar dos veces.
+   *
+   * Si se indica una corrección, en la misma transacción se actualiza el dato fiscal y se
+   * deja constancia en la bitácora de correcciones: o se aplica todo, o nada.
    */
-  abstract requeueDeadLettered(invoiceId: string): Promise<RequeueOutcome>;
+  abstract requeueDeadLettered(
+    invoiceId: string,
+    correction?: FiscalDataCorrection,
+  ): Promise<RequeueOutcome>;
 }

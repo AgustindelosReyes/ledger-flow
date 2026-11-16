@@ -19,6 +19,10 @@ export class InvoiceNotDeadLetteredError extends DomainError {
   }
 }
 
+export class InvalidFiscalCorrectionError extends DomainError {
+  readonly code = 'INVALID_FISCAL_CORRECTION';
+}
+
 /**
  * Resultado fallido de un intento de emisión, ya persistido en la bitácora. Le dice al
  * adaptador de la cola qué hacer: reintentar, o dar el job por terminado.

@@ -2,6 +2,7 @@
 -- para esta sesión; el plan de cuentas (datos de referencia) se conserva.
 SET session_replication_role = replica;
 TRUNCATE TABLE
+  "invoice_corrections",
   "invoice_attempts",
   "invoices",
   "ledger_entries",

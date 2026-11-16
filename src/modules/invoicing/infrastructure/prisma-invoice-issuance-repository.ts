@@ -3,7 +3,9 @@ import { PrismaService } from '../../../shared/infrastructure/prisma/prisma.serv
 import type { FiscalAuthorization } from '../application/ports/fiscal-authority.js';
 import {
   InvoiceIssuanceRepository,
+  type AppliedCorrection,
   type AttemptRecord,
+  type FiscalDataCorrection,
   type InvoiceSnapshot,
   type RequeueOutcome,
 } from '../application/ports/invoice-issuance-repository.js';
@@ -119,11 +121,21 @@ export class PrismaInvoiceIssuanceRepository extends InvoiceIssuanceRepository {
     });
   }
 
-  requeueDeadLettered(invoiceId: string): Promise<RequeueOutcome> {
+  requeueDeadLettered(
+    invoiceId: string,
+    correction?: FiscalDataCorrection,
+  ): Promise<RequeueOutcome> {
     return this.prisma.$transaction(async (tx): Promise<RequeueOutcome> => {
       const invoice = await tx.invoice.findUnique({
         where: { id: invoiceId },
-        select: { id: true, paymentId: true, status: true, version: true, correlationId: true },
+        select: {
+          id: true,
+          paymentId: true,
+          status: true,
+          version: true,
+          correlationId: true,
+          payment: { select: { payerTaxId: true } },
+        },
       });
       if (invoice === null) {
         return { kind: 'not_found' };
@@ -134,11 +146,41 @@ export class PrismaInvoiceIssuanceRepository extends InvoiceIssuanceRepository {
 
       const { count } = await tx.invoice.updateMany({
         where: { id: invoice.id, status: 'DEAD_LETTERED', version: invoice.version },
-        data: { status: 'PENDING', version: { increment: 1 } },
+        data: {
+          status: 'PENDING',
+          version: { increment: 1 },
+          ...(correction === undefined ? {} : { type: correction.invoiceType }),
+        },
       });
       if (count === 0) {
         // Otra solicitud de reencolado ganó la carrera entre la lectura y el UPDATE.
         return { kind: 'not_dead_lettered', status: 'PENDING' };
+      }
+
+      let applied: AppliedCorrection | null = null;
+      if (correction !== undefined) {
+        // El pago es la proyección que lee el worker; el payload original del webhook queda
+        // intacto en `webhook_events` como evidencia de lo que envió la pasarela.
+        await tx.payment.update({
+          where: { id: invoice.paymentId },
+          data: { payerTaxId: correction.payerTaxId },
+        });
+        await tx.invoiceCorrection.create({
+          data: {
+            invoiceId: invoice.id,
+            field: 'payerTaxId',
+            previousValue: invoice.payment.payerTaxId,
+            newValue: correction.payerTaxId,
+            reason: correction.reason ?? null,
+            correlationId: correction.requestCorrelationId,
+          },
+        });
+        applied = {
+          field: 'payerTaxId',
+          previousValue: invoice.payment.payerTaxId,
+          newValue: correction.payerTaxId,
+          invoiceType: correction.invoiceType,
+        };
       }
 
       const outboxEvent = await tx.outboxEvent.create({
@@ -154,6 +196,7 @@ export class PrismaInvoiceIssuanceRepository extends InvoiceIssuanceRepository {
         kind: 'requeued',
         outboxEventId: outboxEvent.id,
         correlationId: invoice.correlationId,
+        correction: applied,
       };
     });
   }

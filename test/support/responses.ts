@@ -130,6 +130,16 @@ const traceSchema = z.strictObject({
           createdAt: z.iso.datetime(),
         }),
       ),
+      corrections: z.array(
+        z.strictObject({
+          field: z.string(),
+          previousValue: z.string().nullable(),
+          newValue: z.string(),
+          reason: z.string().nullable(),
+          correlationId: z.string(),
+          createdAt: z.iso.datetime(),
+        }),
+      ),
     })
     .nullable(),
   queue: z.strictObject({
@@ -169,6 +179,14 @@ const retryAcceptedSchema = z.strictObject({
   invoiceId: z.uuid(),
   outboxEventId: z.uuid(),
   correlationId: z.string(),
+  correction: z
+    .strictObject({
+      field: z.literal('payerTaxId'),
+      previousValue: z.string().nullable(),
+      newValue: z.string(),
+      invoiceType: z.enum(['A', 'B', 'C']),
+    })
+    .nullable(),
 });
 
 export type OperationTrace = z.infer<typeof traceSchema>;

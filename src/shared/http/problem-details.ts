@@ -77,6 +77,10 @@ const DOMAIN_PROBLEMS: Readonly<Record<string, DomainProblem>> = {
     status: HttpStatus.CONFLICT,
     title: 'Invoice is not in the dead letter queue',
   },
+  INVALID_FISCAL_CORRECTION: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    title: 'Invalid fiscal data correction',
+  },
   INVALID_MONEY: { status: HttpStatus.UNPROCESSABLE_ENTITY, title: 'Invalid monetary amount' },
   CURRENCY_MISMATCH: { status: HttpStatus.UNPROCESSABLE_ENTITY, title: 'Currency mismatch' },
   INVALID_JOURNAL_ENTRY: {
