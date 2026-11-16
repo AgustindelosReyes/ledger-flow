@@ -55,6 +55,8 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
+      # La imagen de runtime solo trae dependencias de producción (sin pino-pretty).
+      NODE_ENV: production
       # Dentro de la red de compose los hosts son los nombres de servicio.
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
