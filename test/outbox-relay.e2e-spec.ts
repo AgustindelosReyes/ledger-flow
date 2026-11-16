@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
+import { randomUUID } from 'node:crypto';
+import { afterAll, beforeAll, describe, expect, it, jest } from '@jest/globals';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { FISCAL_INVOICE_QUEUE, ISSUE_INVOICE_JOB } from '../src/modules/invoicing/invoice-queue.js';
@@ -109,25 +110,73 @@ describe('Outbox relay (e2e)', () => {
     );
   });
 
-  it('keeps an unpublishable event pending, records the error and still publishes the rest', async () => {
-    const ack = await pay('relay-poison-0001');
-    const poison = await t.prisma.outboxEvent.create({
-      data: {
-        type: 'unknown.event',
-        aggregateId: ack.invoiceId,
-        payload: {},
-        correlationId: 'relay-poison-0001',
-      },
+  describe('poison-pill protection', () => {
+    const MAX_ATTEMPTS = 5;
+
+    const createEvent = (type: string, payload: Record<string, string>): Promise<{ id: string }> =>
+      t.prisma.outboxEvent.create({
+        data: { type, aggregateId: randomUUID(), payload, correlationId: 'relay-poison-0001' },
+        select: { id: true },
+      });
+
+    const stateOf = async (
+      id: string,
+    ): Promise<{ status: string; attempts: number; lastError: string | null }> => {
+      const event = await t.prisma.outboxEvent.findUniqueOrThrow({ where: { id } });
+      return { status: event.status, attempts: event.attempts, lastError: event.lastError };
+    };
+
+    it('marks an event of unknown type as FAILED after 5 attempts and stops retrying it', async () => {
+      const poison = await createEvent('unknown.event', {});
+      const ack = await pay('relay-poison-neighbour');
+
+      // El evento envenenado no bloquea al evento válido que comparte el lote.
+      expect(await relay.publishPending()).toBe(1);
+      expect((await outboxOf(ack.invoiceId)).status).toBe('PUBLISHED');
+      expect(await stateOf(poison.id)).toMatchObject({ status: 'PENDING', attempts: 1 });
+
+      for (let attempt = 2; attempt < MAX_ATTEMPTS; attempt += 1) {
+        await relay.publishPending();
+        expect(await stateOf(poison.id)).toMatchObject({ status: 'PENDING', attempts: attempt });
+      }
+
+      await relay.publishPending();
+      const failed = await stateOf(poison.id);
+      expect(failed).toMatchObject({ status: 'FAILED', attempts: MAX_ATTEMPTS });
+      expect(failed.lastError).toContain('unknown.event');
+
+      // Ya no se toma: el contador no vuelve a moverse.
+      await relay.publishPending();
+      expect(await stateOf(poison.id)).toMatchObject({ status: 'FAILED', attempts: MAX_ATTEMPTS });
     });
 
-    expect(await relay.publishPending()).toBe(1);
+    it('marks an event with a corrupt payload as FAILED after 5 attempts', async () => {
+      const corrupt = await createEvent('invoice.requested', { invoiceId: 'not-a-uuid' });
 
-    const stored = await t.prisma.outboxEvent.findUniqueOrThrow({ where: { id: poison.id } });
-    expect(stored.status).toBe('PENDING');
-    expect(stored.attempts).toBe(1);
-    expect(stored.lastError).toContain('unknown.event');
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+        await relay.publishPending();
+      }
 
-    // Se retira para no dejar un evento envenenado a los demás archivos de test.
-    await t.prisma.outboxEvent.delete({ where: { id: poison.id } });
+      const failed = await stateOf(corrupt.id);
+      expect(failed).toMatchObject({ status: 'FAILED', attempts: MAX_ATTEMPTS });
+      expect(failed.lastError).toContain('Invalid payload');
+    });
+
+    it('never fails a valid event because of a broker outage: it stays PENDING until Redis is back', async () => {
+      const ack = await pay('relay-outage-0001');
+      const outage = jest.spyOn(queue, 'add').mockRejectedValue(new Error('Connection is closed'));
+
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS + 2; attempt += 1) {
+        expect(await relay.publishPending()).toBe(0);
+      }
+      const during = await outboxOf(ack.invoiceId);
+      expect(during).toMatchObject({ status: 'PENDING', attempts: MAX_ATTEMPTS + 2 });
+      expect(during.lastError).toContain('Connection is closed');
+
+      outage.mockRestore();
+      expect(await relay.publishPending()).toBe(1);
+      expect((await outboxOf(ack.invoiceId)).status).toBe('PUBLISHED');
+      expect(await queue.getJob(during.id)).toBeDefined();
+    });
   });
 });

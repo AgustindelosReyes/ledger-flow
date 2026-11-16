@@ -153,7 +153,7 @@ export class TraceQueueJobDto {
   @ApiProperty({ format: 'uuid', description: 'Mensaje de outbox; su id es también el jobId' })
   outboxEventId!: string;
 
-  @ApiProperty({ enum: ['PENDING', 'PUBLISHED'] })
+  @ApiProperty({ enum: ['PENDING', 'PUBLISHED', 'FAILED'] })
   outboxStatus!: string;
 
   @ApiProperty({ format: 'date-time' })

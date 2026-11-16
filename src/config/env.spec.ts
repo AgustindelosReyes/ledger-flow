@@ -17,6 +17,7 @@ describe('validateEnv', () => {
     expect(env.PORT).toBe(3000);
     expect(env.FISCAL_SIMULATOR_FAILURE_RATE).toBe(0.3);
     expect(env.INVOICE_JOB_ATTEMPTS).toBe(5);
+    expect(env.OUTBOX_MAX_ATTEMPTS).toBe(5);
   });
 
   it('coerces numeric strings into numbers', () => {

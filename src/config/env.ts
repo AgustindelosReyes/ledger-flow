@@ -40,6 +40,7 @@ const envSchema = z
 
     OUTBOX_POLL_INTERVAL_MS: positiveInt.default(1000),
     OUTBOX_BATCH_SIZE: positiveInt.max(500).default(50),
+    OUTBOX_MAX_ATTEMPTS: positiveInt.default(5),
     OUTBOX_RELAY_ENABLED: flag.default(true),
   })
   .refine((env) => env.FISCAL_SIMULATOR_MAX_LATENCY_MS >= env.FISCAL_SIMULATOR_MIN_LATENCY_MS, {

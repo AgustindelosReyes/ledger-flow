@@ -136,7 +136,7 @@ const traceSchema = z.strictObject({
     jobs: z.array(
       z.strictObject({
         outboxEventId: z.uuid(),
-        outboxStatus: z.enum(['PENDING', 'PUBLISHED']),
+        outboxStatus: z.enum(['PENDING', 'PUBLISHED', 'FAILED']),
         requestedAt: z.iso.datetime(),
         publishedAt: z.iso.datetime().nullable(),
         jobState: z.string().nullable(),

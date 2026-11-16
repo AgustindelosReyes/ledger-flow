@@ -98,6 +98,9 @@ enum InvoiceAttemptOutcome {
 enum OutboxStatus {
   PENDING
   PUBLISHED
+  /// Impublicable (tipo desconocido o payload corrupto) tras agotar los intentos. El relay
+  /// deja de tomarlo; requiere intervención manual.
+  FAILED
 
   @@map("outbox_status")
 }

@@ -20,9 +20,21 @@ import {
 
 interface PendingOutboxEvent {
   readonly id: string;
+  readonly attempts: number;
   readonly type: string;
   readonly payload: unknown;
   readonly correlationId: string;
+}
+
+/**
+ * El evento no puede publicarse por más que se reintente: su tipo no tiene publicador o su
+ * payload no cumple el contrato. A diferencia de una caída de Redis, no es transitorio.
+ */
+export class UnpublishableOutboxEventError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UnpublishableOutboxEventError';
+  }
 }
 
 const MAX_ERROR_LENGTH = 1000;
@@ -45,6 +57,7 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(OutboxRelay.name);
   private readonly pollIntervalMs: number;
   private readonly batchSize: number;
+  private readonly maxAttempts: number;
   private readonly jobAttempts: number;
   private readonly jobBackoffMs: number;
 
@@ -60,6 +73,7 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
   ) {
     this.pollIntervalMs = config.get('OUTBOX_POLL_INTERVAL_MS', { infer: true });
     this.batchSize = config.get('OUTBOX_BATCH_SIZE', { infer: true });
+    this.maxAttempts = config.get('OUTBOX_MAX_ATTEMPTS', { infer: true });
     this.jobAttempts = config.get('INVOICE_JOB_ATTEMPTS', { infer: true });
     this.jobBackoffMs = config.get('INVOICE_JOB_BACKOFF_MS', { infer: true });
   }
@@ -85,7 +99,7 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
     return this.prisma.$transaction(
       async (tx) => {
         const events = await tx.$queryRaw<PendingOutboxEvent[]>`
-          SELECT "id", "type", "payload", "correlation_id" AS "correlationId"
+          SELECT "id", "type", "payload", "attempts", "correlation_id" AS "correlationId"
           FROM "outbox_events"
           WHERE "status" = 'PENDING'
           ORDER BY "created_at"
@@ -105,13 +119,28 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
             published += 1;
             this.logger.log({ ...log, type: event.type }, 'Outbox event published to the queue');
           } catch (error) {
-            // El evento queda PENDING y se reintenta en la próxima iteración.
+            const attempts = event.attempts + 1;
+            // Protección contra poison pills: un evento impublicable no puede quedar en un
+            // bucle infinito ni tapar el lote. Solo este tipo de error agota intentos; una
+            // falla de infraestructura deja el evento PENDING para no perder mensajes válidos.
+            const failed =
+              error instanceof UnpublishableOutboxEventError && attempts >= this.maxAttempts;
             const message = error instanceof Error ? error.message : 'Unknown error';
+
             await tx.outboxEvent.update({
               where: { id: event.id },
-              data: { attempts: { increment: 1 }, lastError: message.slice(0, MAX_ERROR_LENGTH) },
+              data: {
+                attempts,
+                lastError: message.slice(0, MAX_ERROR_LENGTH),
+                ...(failed ? { status: 'FAILED' } : {}),
+              },
             });
-            this.logger.error({ ...log, err: error }, 'Failed to publish outbox event');
+            this.logger.error(
+              { ...log, type: event.type, attempts, maxAttempts: this.maxAttempts, err: error },
+              failed
+                ? 'Outbox event marked as FAILED: it cannot be published'
+                : 'Failed to publish outbox event; it will be retried',
+            );
           }
         }
         return published;
@@ -122,9 +151,17 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
 
   private async publish(event: PendingOutboxEvent): Promise<void> {
     if (event.type !== INVOICE_REQUESTED_EVENT) {
-      throw new Error(`No publisher registered for outbox event type "${event.type}"`);
+      throw new UnpublishableOutboxEventError(
+        `No publisher registered for outbox event type "${event.type}"`,
+      );
     }
-    const payload = invoiceRequestedPayloadSchema.parse(event.payload);
+    const parsed = invoiceRequestedPayloadSchema.safeParse(event.payload);
+    if (!parsed.success) {
+      throw new UnpublishableOutboxEventError(
+        `Invalid payload for outbox event type "${event.type}": ${parsed.error.message}`,
+      );
+    }
+    const payload = parsed.data;
 
     await this.queue.add(
       ISSUE_INVOICE_JOB,
