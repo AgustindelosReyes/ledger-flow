@@ -61,6 +61,25 @@ describe('validateEnv', () => {
     );
   });
 
+  it('enables the background roles by default and parses explicit flags strictly', () => {
+    expect(validateEnv(validEnv)).toMatchObject({
+      OUTBOX_RELAY_ENABLED: true,
+      INVOICE_WORKER_ENABLED: true,
+    });
+    expect(
+      validateEnv({ ...validEnv, OUTBOX_RELAY_ENABLED: 'false', INVOICE_WORKER_ENABLED: 'false' }),
+    ).toMatchObject({ OUTBOX_RELAY_ENABLED: false, INVOICE_WORKER_ENABLED: false });
+    // "0", "no" o "FALSE" no se interpretan en silencio como verdadero: son un error.
+    expect(() => validateEnv({ ...validEnv, INVOICE_WORKER_ENABLED: '0' })).toThrow(
+      'INVOICE_WORKER_ENABLED',
+    );
+  });
+
+  it('rejects a Redis database index outside 0-15', () => {
+    expect(validateEnv(validEnv).REDIS_DB).toBe(0);
+    expect(() => validateEnv({ ...validEnv, REDIS_DB: '16' })).toThrow('REDIS_DB');
+  });
+
   it('rejects a simulator latency range where max < min', () => {
     expect(() =>
       validateEnv({

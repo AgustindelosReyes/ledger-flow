@@ -3,6 +3,8 @@ import { z } from 'zod';
 const port = z.coerce.number().int().min(1).max(65535);
 const positiveInt = z.coerce.number().int().positive();
 const nonNegativeInt = z.coerce.number().int().nonnegative();
+/** Booleano explícito: `z.coerce.boolean()` trataría el string "false" como verdadero. */
+const flag = z.enum(['true', 'false']).transform((value) => value === 'true');
 
 const envSchema = z
   .object({
@@ -17,6 +19,7 @@ const envSchema = z
     REDIS_HOST: z.string().min(1),
     REDIS_PORT: port,
     REDIS_PASSWORD: z.string().min(1).optional(),
+    REDIS_DB: z.coerce.number().int().min(0).max(15).default(0),
 
     WEBHOOK_SIGNING_SECRET: z.string().min(32),
     WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS: positiveInt.default(300),
@@ -33,7 +36,11 @@ const envSchema = z
     INVOICE_JOB_BACKOFF_MS: positiveInt.default(1000),
     INVOICE_WORKER_CONCURRENCY: positiveInt.default(5),
 
+    INVOICE_WORKER_ENABLED: flag.default(true),
+
     OUTBOX_POLL_INTERVAL_MS: positiveInt.default(1000),
+    OUTBOX_BATCH_SIZE: positiveInt.max(500).default(50),
+    OUTBOX_RELAY_ENABLED: flag.default(true),
   })
   .refine((env) => env.FISCAL_SIMULATOR_MAX_LATENCY_MS >= env.FISCAL_SIMULATOR_MIN_LATENCY_MS, {
     path: ['FISCAL_SIMULATOR_MAX_LATENCY_MS'],

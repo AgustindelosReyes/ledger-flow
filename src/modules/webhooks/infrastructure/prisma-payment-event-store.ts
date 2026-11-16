@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client.js';
 import { PrismaService } from '../../../shared/infrastructure/prisma/prisma.service.js';
+import { INVOICE_REQUESTED_EVENT } from '../../invoicing/invoice-queue.js';
 import { PaymentAlreadyRecordedError } from '../application/errors.js';
 import {
   type ApprovedPaymentRecord,
@@ -8,9 +9,6 @@ import {
   type RecordOutcome,
   type WebhookEventRecord,
 } from '../application/ports/payment-event-store.js';
-
-/** Tipo de mensaje de outbox que la Fase 3 traduce en un job de BullMQ. */
-export const INVOICE_REQUESTED_EVENT = 'invoice.requested';
 
 const UNIQUE_VIOLATION = 'P2002';
 
@@ -130,7 +128,8 @@ export class PrismaPaymentEventStore extends PaymentEventStore {
       select: { id: true },
     });
 
-    // Outbox: la intención de encolar el job fiscal se confirma junto con el pago.
+    // Outbox: la intención de encolar el job fiscal se confirma junto con el pago. El relay
+    // la publica después en BullMQ.
     await tx.outboxEvent.create({
       data: {
         type: INVOICE_REQUESTED_EVENT,

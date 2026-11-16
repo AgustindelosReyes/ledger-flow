@@ -71,6 +71,12 @@ const DOMAIN_PROBLEMS: Readonly<Record<string, DomainProblem>> = {
     title: 'Idempotency key reused with a different payload',
   },
   PAYMENT_ALREADY_RECORDED: { status: HttpStatus.CONFLICT, title: 'Payment already recorded' },
+  OPERATION_NOT_FOUND: { status: HttpStatus.NOT_FOUND, title: 'Operation not found' },
+  INVOICE_NOT_FOUND: { status: HttpStatus.NOT_FOUND, title: 'Invoice not found' },
+  INVOICE_NOT_DEAD_LETTERED: {
+    status: HttpStatus.CONFLICT,
+    title: 'Invoice is not in the dead letter queue',
+  },
   INVALID_MONEY: { status: HttpStatus.UNPROCESSABLE_ENTITY, title: 'Invalid monetary amount' },
   CURRENCY_MISMATCH: { status: HttpStatus.UNPROCESSABLE_ENTITY, title: 'Currency mismatch' },
   INVALID_JOURNAL_ENTRY: {

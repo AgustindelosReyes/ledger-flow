@@ -66,3 +66,122 @@ export function problemOf(response: Response): ProblemBody {
 export function balancesOf(response: Response): BalanceRow[] {
   return balancesSchema.parse(response.body);
 }
+
+const traceSchema = z.strictObject({
+  correlationId: z.string(),
+  webhookEvent: z.strictObject({
+    id: z.uuid(),
+    provider: z.string(),
+    eventId: z.string(),
+    eventType: z.string(),
+    status: z.string(),
+    receivedAt: z.iso.datetime(),
+  }),
+  payment: z.strictObject({
+    id: z.uuid(),
+    externalPaymentId: z.string(),
+    status: z.string(),
+    amount: z.string(),
+    currency: z.string(),
+    createdAt: z.iso.datetime(),
+  }),
+  ledgerTransactions: z.array(
+    z.strictObject({
+      id: z.uuid(),
+      type: z.string(),
+      description: z.string(),
+      postedAt: z.iso.datetime(),
+      entries: z.array(
+        z.strictObject({
+          accountCode: z.string(),
+          direction: z.enum(['DEBIT', 'CREDIT']),
+          amount: z.string(),
+          currency: z.string(),
+        }),
+      ),
+    }),
+  ),
+  invoice: z
+    .strictObject({
+      id: z.uuid(),
+      status: z.enum(['PENDING', 'PROCESSING', 'ISSUED', 'DEAD_LETTERED']),
+      type: z.string(),
+      pointOfSale: z.number().int(),
+      number: z.number().int().nullable(),
+      cae: z.string().nullable(),
+      caeExpiresAt: z.iso.date().nullable(),
+      netAmount: z.string(),
+      taxAmount: z.string(),
+      totalAmount: z.string(),
+      currency: z.string(),
+      attemptCount: z.number().int(),
+      lastError: z.string().nullable(),
+      issuedAt: z.iso.datetime().nullable(),
+      attempts: z.array(
+        z.strictObject({
+          attemptNumber: z.number().int(),
+          jobId: z.string(),
+          outcome: z.enum(['SUCCEEDED', 'RETRYABLE_FAILURE', 'PERMANENT_FAILURE']),
+          httpStatus: z.number().int().nullable(),
+          errorCode: z.string().nullable(),
+          errorMessage: z.string().nullable(),
+          response: z.record(z.string(), z.unknown()).nullable(),
+          durationMs: z.number().int().nonnegative(),
+          createdAt: z.iso.datetime(),
+        }),
+      ),
+    })
+    .nullable(),
+  queue: z.strictObject({
+    jobs: z.array(
+      z.strictObject({
+        outboxEventId: z.uuid(),
+        outboxStatus: z.enum(['PENDING', 'PUBLISHED']),
+        requestedAt: z.iso.datetime(),
+        publishedAt: z.iso.datetime().nullable(),
+        jobState: z.string().nullable(),
+        attemptsMade: z.number().int().nullable(),
+        failedReason: z.string().nullable(),
+      }),
+    ),
+    deadLetter: z
+      .strictObject({ errorCode: z.string(), reason: z.string(), deadLetteredAt: z.iso.datetime() })
+      .nullable(),
+  }),
+});
+
+const deadLettersSchema = z.array(
+  z.strictObject({
+    invoiceId: z.uuid(),
+    paymentId: z.uuid(),
+    correlationId: z.string(),
+    sourceJobId: z.string(),
+    errorCode: z.string(),
+    reason: z.string(),
+    attemptCount: z.number().int(),
+    deadLetteredAt: z.iso.datetime(),
+    lastError: z.string().nullable(),
+  }),
+);
+
+const retryAcceptedSchema = z.strictObject({
+  status: z.literal('requeued'),
+  invoiceId: z.uuid(),
+  outboxEventId: z.uuid(),
+  correlationId: z.string(),
+});
+
+export type OperationTrace = z.infer<typeof traceSchema>;
+export type DeadLetter = z.infer<typeof deadLettersSchema>[number];
+
+export function traceOf(response: Response): OperationTrace {
+  return traceSchema.parse(response.body);
+}
+
+export function deadLettersOf(response: Response): DeadLetter[] {
+  return deadLettersSchema.parse(response.body);
+}
+
+export function retryAcceptedOf(response: Response): z.infer<typeof retryAcceptedSchema> {
+  return retryAcceptedSchema.parse(response.body);
+}

@@ -255,6 +255,10 @@ model InvoiceAttempt {
   jobId         String                @map("job_id") @db.VarChar(128)
   attemptNumber Int                   @map("attempt_number")
   outcome       InvoiceAttemptOutcome
+  /// Código HTTP devuelto por el ente fiscal; NULL si no hubo respuesta (timeout).
+  httpStatus    Int?                  @map("http_status")
+  /// Cuerpo de la respuesta del ente fiscal (autorización o detalle del rechazo).
+  response      Json?
   errorCode     String?               @map("error_code") @db.VarChar(64)
   errorMessage  String?               @map("error_message") @db.VarChar(1000)
   durationMs    Int                   @map("duration_ms")

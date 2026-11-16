@@ -1,14 +1,20 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
-import { validateEnv } from './config/env.js';
+import { validateEnv, type Env } from './config/env.js';
 import { HealthController } from './health/health.controller.js';
+import { InvoicingModule } from './modules/invoicing/invoicing.module.js';
 import { LedgerModule } from './modules/ledger/ledger.module.js';
+import { OperationsModule } from './modules/operations/operations.module.js';
+import { OutboxModule } from './modules/outbox/outbox.module.js';
 import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
 import { ProblemDetailsFilter } from './shared/http/problem-details.filter.js';
 import { createValidationPipe } from './shared/http/validation.js';
 import { PrismaModule } from './shared/infrastructure/prisma/prisma.module.js';
+import { redisConnectionOptions } from './shared/infrastructure/redis/redis-connection.js';
 import { LoggingModule } from './shared/logging/logging.module.js';
+import { RuntimeRolesModule } from './shared/runtime/runtime-roles.js';
 
 @Module({
   imports: [
@@ -18,9 +24,19 @@ import { LoggingModule } from './shared/logging/logging.module.js';
       validate: validateEnv,
     }),
     LoggingModule,
+    RuntimeRolesModule,
     PrismaModule,
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) => ({
+        connection: redisConnectionOptions(config),
+      }),
+    }),
     WebhooksModule,
     LedgerModule,
+    InvoicingModule,
+    OutboxModule,
+    OperationsModule,
   ],
   controllers: [HealthController],
   providers: [
