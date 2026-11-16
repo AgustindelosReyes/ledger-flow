@@ -1,0 +1,28 @@
+# Dependencias
+node_modules/
+
+# Build
+dist/
+*.tsbuildinfo
+
+# Cliente Prisma generado (se regenera con `pnpm prisma:generate`)
+src/generated/
+
+# Entorno: nunca commitear secretos reales
+.env
+.env.*
+!.env.example
+
+# Tests
+coverage/
+
+# Logs
+*.log
+logs/
+
+# Editor / SO
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db

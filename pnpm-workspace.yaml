@@ -1,0 +1,7 @@
+# pnpm bloquea scripts de instalación por defecto; se habilitan solo los necesarios.
+allowBuilds:
+  '@prisma/engines': true
+  prisma: true
+  msgpackr-extract: true
+  '@parcel/watcher': true
+  '@scarf/scarf': false
