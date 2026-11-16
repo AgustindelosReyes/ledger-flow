@@ -9,7 +9,7 @@ export class TraceWebhookEventDto {
   @ApiProperty()
   provider!: string;
 
-  @ApiProperty({ description: 'Clave de idempotencia recibida de la pasarela' })
+  @ApiProperty({ description: 'Idempotency key received from the gateway' })
   eventId!: string;
 
   @ApiProperty()
@@ -77,13 +77,17 @@ export class TraceInvoiceAttemptDto {
   @ApiProperty()
   attemptNumber!: number;
 
-  @ApiProperty({ description: 'Job de BullMQ que ejecutó el intento' })
+  @ApiProperty({ description: 'BullMQ job that ran the attempt' })
   jobId!: string;
 
   @ApiProperty({ enum: ['SUCCEEDED', 'RETRYABLE_FAILURE', 'PERMANENT_FAILURE'] })
   outcome!: string;
 
-  @ApiProperty({ ...nullable, type: Number, description: 'null si no hubo respuesta (timeout)' })
+  @ApiProperty({
+    ...nullable,
+    type: Number,
+    description: 'null when there was no response (timeout)',
+  })
   httpStatus!: number | null;
 
   @ApiProperty({ ...nullable, type: String })
@@ -92,10 +96,10 @@ export class TraceInvoiceAttemptDto {
   @ApiProperty({ ...nullable, type: String })
   errorMessage!: string | null;
 
-  @ApiProperty({ ...nullable, type: Object, description: 'Respuesta del ente fiscal' })
+  @ApiProperty({ ...nullable, type: Object, description: 'Response of the fiscal authority' })
   response!: unknown;
 
-  @ApiProperty({ description: 'Latencia del intento en milisegundos' })
+  @ApiProperty({ description: 'Latency of the attempt in milliseconds' })
   durationMs!: number;
 
   @ApiProperty({ format: 'date-time' })
@@ -115,7 +119,7 @@ export class TraceInvoiceCorrectionDto {
   @ApiProperty({ ...nullable, type: String })
   reason!: string | null;
 
-  @ApiProperty({ description: 'correlationId del request administrativo que la aplicó' })
+  @ApiProperty({ description: 'Correlation id of the admin request that applied it' })
   correlationId!: string;
 
   @ApiProperty({ format: 'date-time' })
@@ -138,7 +142,11 @@ export class TraceInvoiceDto {
   @ApiProperty({ ...nullable, type: Number })
   number!: number | null;
 
-  @ApiProperty({ ...nullable, type: String, description: 'CAE: presente solo si fue emitida' })
+  @ApiProperty({
+    ...nullable,
+    type: String,
+    description: 'Authorization code (CAE): present only once issued',
+  })
   cae!: string | null;
 
   @ApiProperty({ ...nullable, type: String, format: 'date' })
@@ -170,13 +178,13 @@ export class TraceInvoiceDto {
 
   @ApiProperty({
     type: [TraceInvoiceCorrectionDto],
-    description: 'Correcciones manuales de datos fiscales aplicadas desde la DLQ',
+    description: 'Manual corrections of fiscal data applied when retrying from the DLQ',
   })
   corrections!: TraceInvoiceCorrectionDto[];
 }
 
 export class TraceQueueJobDto {
-  @ApiProperty({ format: 'uuid', description: 'Mensaje de outbox; su id es también el jobId' })
+  @ApiProperty({ format: 'uuid', description: 'Outbox message; its id is also the BullMQ job id' })
   outboxEventId!: string;
 
   @ApiProperty({ enum: ['PENDING', 'PUBLISHED', 'FAILED'] })
@@ -192,8 +200,8 @@ export class TraceQueueJobDto {
     ...nullable,
     type: String,
     description:
-      'Estado del job en BullMQ (waiting, active, delayed, completed, failed); null si aún ' +
-      'no se publicó o si ya venció su retención',
+      'Job state in BullMQ (waiting, active, delayed, completed, failed); null if it has ' +
+      'not been published yet or its retention expired',
   })
   jobState!: string | null;
 
@@ -224,7 +232,9 @@ export class TraceQueueDto {
 }
 
 export class OperationTraceDto {
-  @ApiProperty({ description: 'Enlaza los logs de toda la operación, del webhook al worker' })
+  @ApiProperty({
+    description: 'Links every log line of the operation, from the webhook to the worker',
+  })
   correlationId!: string;
 
   @ApiProperty({ type: TraceWebhookEventDto })

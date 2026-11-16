@@ -29,8 +29,10 @@ export class PayerDto {
   name?: string;
 
   @ApiPropertyOptional({
-    description: 'DNI (7-8 dígitos) o CUIT (11 dígitos), sin separadores',
-    example: '20304050607',
+    description:
+      'DNI (7-8 digits) or CUIT (11 digits), without separators. A CUIT yields a type A ' +
+      'invoice; anything else, a type B invoice (final consumer).',
+    example: '30712345671',
   })
   @IsOptional()
   @Matches(/^(\d{7,8}|\d{11})$/, {
@@ -40,7 +42,7 @@ export class PayerDto {
 }
 
 export class PaymentDataDto {
-  @ApiProperty({ description: 'Identificador del pago en la pasarela', example: 'pay_8f3a21' })
+  @ApiProperty({ description: 'Payment identifier in the gateway', example: 'pay_8f3a21' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(128)
@@ -48,8 +50,8 @@ export class PaymentDataDto {
 
   @ApiProperty({
     description:
-      'Importe total (IVA incluido) como string decimal con hasta 2 decimales. ' +
-      'Se transporta como string para no perder precisión en el parseo de JSON.',
+      'Gross amount (VAT included) as a decimal string with up to 2 decimal places. It is ' +
+      'transported as a string so that no precision is lost when the JSON is parsed.',
     example: '12100.00',
   })
   @Matches(/^\d{1,13}(\.\d{1,2})?$/, {
@@ -57,7 +59,7 @@ export class PaymentDataDto {
   })
   amount!: string;
 
-  @ApiProperty({ description: 'Código ISO 4217', example: 'ARS' })
+  @ApiProperty({ description: 'ISO 4217 currency code', example: 'ARS' })
   @Matches(/^[A-Z]{3}$/, { message: 'currency must be an ISO 4217 code, e.g. "ARS"' })
   currency!: string;
 
@@ -67,7 +69,7 @@ export class PaymentDataDto {
   @Type(() => PayerDto)
   payer?: PayerDto;
 
-  @ApiPropertyOptional({ example: 'Suscripción plan Pro — noviembre', maxLength: 500 })
+  @ApiPropertyOptional({ example: 'Pro plan subscription - November', maxLength: 500 })
   @IsOptional()
   @IsString()
   @MaxLength(500)
@@ -76,7 +78,7 @@ export class PaymentDataDto {
 
 export class PaymentWebhookDto {
   @ApiProperty({
-    description: 'Clave de idempotencia: identificador único del evento en la pasarela',
+    description: 'Idempotency key: unique identifier of the event in the gateway',
     example: 'evt_01JCD3K9Q2',
   })
   @IsString()
@@ -90,7 +92,7 @@ export class PaymentWebhookDto {
 
   @ApiProperty({
     enum: PAYMENT_EVENT_TYPES,
-    description: 'Solo `payment.approved` genera asiento contable y factura',
+    description: 'Only `payment.approved` produces a journal entry and an invoice',
   })
   @IsIn(PAYMENT_EVENT_TYPES)
   type!: PaymentEventType;
@@ -111,8 +113,8 @@ export class WebhookAckDto {
   @ApiProperty({
     enum: ['accepted', 'duplicate', 'ignored'],
     description:
-      '`accepted`: primera recepción, pago contabilizado. `duplicate`: reentrega sin efectos. ' +
-      '`ignored`: tipo de evento sin efecto contable.',
+      '`accepted`: first delivery, payment booked. `duplicate`: redelivery with no effects. ' +
+      '`ignored`: event type with no accounting effect, stored for audit only.',
   })
   status!: 'accepted' | 'duplicate' | 'ignored';
 
@@ -122,7 +124,12 @@ export class WebhookAckDto {
   @ApiProperty({ format: 'uuid' })
   webhookEventId!: string;
 
-  @ApiProperty({ format: 'uuid', nullable: true, type: String })
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    type: String,
+    description: 'Use it to query `GET /operations/{paymentId}`',
+  })
   paymentId!: string | null;
 
   @ApiProperty({ format: 'uuid', nullable: true, type: String })

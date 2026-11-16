@@ -1,17 +1,10 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import {
-  ApiOkResponse,
-  ApiOperation,
-  ApiProperty,
-  ApiSecurity,
-  ApiTags,
-  ApiUnauthorizedResponse,
-} from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiProperty, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import {
   ADMIN_API_KEY_HEADER,
   AdminApiKeyGuard,
 } from '../../../shared/http/admin-api-key.guard.js';
-import { ProblemDetails } from '../../../shared/http/problem-details.js';
+import { ApiProblemResponse } from '../../../shared/http/api-problem-response.js';
 import {
   LedgerBalancesQuery,
   type AccountBalance,
@@ -27,19 +20,22 @@ class AccountBalanceDto implements AccountBalance {
   @ApiProperty({ enum: ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'] })
   accountType!: string;
 
-  @ApiProperty({ enum: ['DEBIT', 'CREDIT'] })
+  @ApiProperty({ enum: ['DEBIT', 'CREDIT'], description: 'Side on which the account increases' })
   normalBalance!: string;
 
   @ApiProperty({ example: 'ARS' })
   currency!: string;
 
-  @ApiProperty({ example: '0.00' })
+  @ApiProperty({ example: '0.00', description: 'Sum of debit entries, as a decimal string' })
   debits!: string;
 
-  @ApiProperty({ example: '10000.00' })
+  @ApiProperty({ example: '10000.00', description: 'Sum of credit entries, as a decimal string' })
   credits!: string;
 
-  @ApiProperty({ example: '10000.00', description: 'Saldo según la naturaleza de la cuenta' })
+  @ApiProperty({
+    example: '10000.00',
+    description: 'Balance according to the normal side of the account',
+  })
   balance!: string;
 }
 
@@ -52,11 +48,13 @@ export class LedgerController {
 
   @Get('balances')
   @ApiOperation({
-    summary: 'Balance de sumas y saldos por cuenta y moneda',
-    description: 'Calculado en el momento a partir de los asientos; no existe un saldo guardado.',
+    summary: 'Trial balance per account and currency',
+    description:
+      'Computed on demand by aggregating immutable ledger entries; no balance is ever stored ' +
+      'or updated. For every currency, total debits equal total credits.',
   })
   @ApiOkResponse({ type: [AccountBalanceDto] })
-  @ApiUnauthorizedResponse({ type: ProblemDetails })
+  @ApiProblemResponse(401, 'Missing or invalid API key')
   getBalances(): Promise<AccountBalance[]> {
     return this.balances.execute();
   }

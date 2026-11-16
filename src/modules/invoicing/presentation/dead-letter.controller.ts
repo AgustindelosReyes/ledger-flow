@@ -13,18 +13,13 @@ import {
 } from '@nestjs/common';
 import {
   ApiAcceptedResponse,
-  ApiBadRequestResponse,
   ApiBody,
-  ApiConflictResponse,
-  ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiProperty,
   ApiPropertyOptional,
   ApiSecurity,
   ApiTags,
-  ApiUnauthorizedResponse,
-  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
@@ -41,8 +36,8 @@ import {
   ADMIN_API_KEY_HEADER,
   AdminApiKeyGuard,
 } from '../../../shared/http/admin-api-key.guard.js';
+import { ApiProblemResponse } from '../../../shared/http/api-problem-response.js';
 import { CorrelationId } from '../../../shared/http/correlation-id.js';
-import { ProblemDetails } from '../../../shared/http/problem-details.js';
 import { RetryDeadLetteredInvoiceUseCase } from '../application/retry-dead-lettered-invoice.use-case.js';
 import { DeadLetterQuery, type DeadLetterView } from '../infrastructure/dead-letter.query.js';
 
@@ -63,19 +58,24 @@ class DeadLetterDto implements DeadLetterView {
   @ApiProperty({ format: 'uuid' })
   paymentId!: string;
 
-  @ApiProperty({ description: 'correlationId del webhook que originó la operación' })
+  @ApiProperty({ description: 'Correlation id of the webhook that started the operation' })
   correlationId!: string;
 
-  @ApiProperty({ description: 'Job de BullMQ cuyo último intento falló' })
+  @ApiProperty({ description: 'BullMQ job whose last attempt failed' })
   sourceJobId!: string;
 
-  @ApiProperty({ example: 'HTTP_503', description: 'HTTP_503 | TIMEOUT | HTTP_400 | ...' })
+  @ApiProperty({
+    example: 'HTTP_503',
+    description:
+      '`HTTP_503` / `TIMEOUT`: retries exhausted on a transient failure. `HTTP_400`: permanent ' +
+      'rejection by the fiscal authority.',
+  })
   errorCode!: string;
 
   @ApiProperty()
   reason!: string;
 
-  @ApiProperty({ description: 'Intentos acumulados de la factura' })
+  @ApiProperty({ description: 'Attempts accumulated by the invoice across all its jobs' })
   attemptCount!: number;
 
   @ApiProperty({ format: 'date-time' })
@@ -88,8 +88,8 @@ class DeadLetterDto implements DeadLetterView {
 class RetryDeadLetterDto {
   @ApiPropertyOptional({
     description:
-      'Identificador fiscal corregido del receptor: DNI (7-8 dígitos) o CUIT (11 dígitos, ' +
-      'con dígito verificador válido). Reemplaza al que provocó el rechazo del ente fiscal.',
+      'Corrected tax id of the payer: DNI (7-8 digits) or CUIT (11 digits with a valid check ' +
+      'digit). It replaces the one that made the fiscal authority reject the invoice.',
     example: '30712345671',
   })
   @IsOptional()
@@ -99,8 +99,8 @@ class RetryDeadLetterDto {
   payerTaxId?: string;
 
   @ApiPropertyOptional({
-    description: 'Motivo de la corrección, para la bitácora de auditoría',
-    example: 'CUIT mal tipeado por el cliente; confirmado por soporte en el ticket #4821',
+    description: 'Why the data is being corrected; stored in the audit log with `payerTaxId`',
+    example: 'CUIT mistyped by the customer; confirmed by support in ticket #4821',
     maxLength: 500,
   })
   @IsOptional()
@@ -120,7 +120,7 @@ class AppliedCorrectionDto {
   @ApiProperty()
   newValue!: string;
 
-  @ApiProperty({ enum: ['A', 'B', 'C'], description: 'Clase de comprobante resultante' })
+  @ApiProperty({ enum: ['A', 'B', 'C'], description: 'Resulting invoice type' })
   invoiceType!: string;
 }
 
@@ -133,24 +133,24 @@ class RetryAcceptedDto {
 
   @ApiProperty({
     format: 'uuid',
-    description: 'Mensaje de outbox creado; su id será el jobId del nuevo job',
+    description: 'Outbox message created by the retry; its id becomes the id of the new job',
   })
   outboxEventId!: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Correlation id of the original webhook: the trace continues' })
   correlationId!: string;
 
   @ApiProperty({
     nullable: true,
     type: AppliedCorrectionDto,
-    description: 'Corrección aplicada; null si se reencoló sin cambios',
+    description: 'Correction applied; null when the invoice was requeued unchanged',
   })
   correction!: AppliedCorrectionDto | null;
 }
 
 @ApiTags('admin')
 @ApiSecurity(ADMIN_API_KEY_HEADER)
-@ApiUnauthorizedResponse({ type: ProblemDetails })
+@ApiProblemResponse(401, 'Missing or invalid API key')
 @Controller('admin/dlq')
 @UseGuards(AdminApiKeyGuard)
 export class DeadLetterController {
@@ -162,8 +162,14 @@ export class DeadLetterController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Lista las facturas en falla definitiva (Dead Letter Queue)' })
+  @ApiOperation({
+    summary: 'List invoices in the dead letter queue',
+    description:
+      'Invoices that failed permanently: either the retries were exhausted on transient ' +
+      'failures, or the fiscal authority rejected the data.',
+  })
   @ApiOkResponse({ type: [DeadLetterDto] })
+  @ApiProblemResponse(400, 'Invalid `limit`')
   list(@Query() query: ListDeadLettersQueryDto): Promise<DeadLetterView[]> {
     return this.deadLetters.list(query.limit);
   }
@@ -171,23 +177,21 @@ export class DeadLetterController {
   @Post(':invoiceId/retry')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
-    summary: 'Reencola manualmente una factura de la DLQ',
+    summary: 'Manually requeue a dead-lettered invoice',
     description:
-      'Idempotente: la factura vuelve a `PENDING` y se crea un mensaje de outbox en una ' +
-      'única transacción. Repetir la llamada no genera un segundo job: devuelve 409 porque ' +
-      'la factura ya no está en la DLQ. El cuerpo es opcional: permite corregir el dato ' +
-      'fiscal que causó un rechazo permanente (400) del ente; la corrección se valida, se ' +
-      'aplica y se registra en la bitácora de auditoría dentro de la misma transacción.',
+      'Idempotent: the invoice goes back to `PENDING` and an outbox message is created in a ' +
+      'single transaction. Repeating the call cannot create a second job: it returns 409 ' +
+      'because the invoice is no longer dead-lettered.\n\n' +
+      'The body is optional. It lets an operator fix the fiscal data that caused a permanent ' +
+      'rejection (400): the correction is validated first, then applied and written to an ' +
+      'append-only audit log in the same transaction as the requeue.',
   })
   @ApiBody({ type: RetryDeadLetterDto, required: false })
   @ApiAcceptedResponse({ type: RetryAcceptedDto })
-  @ApiBadRequestResponse({ type: ProblemDetails, description: 'Cuerpo o identificador inválido' })
-  @ApiNotFoundResponse({ type: ProblemDetails })
-  @ApiConflictResponse({ type: ProblemDetails, description: 'La factura no está en la DLQ' })
-  @ApiUnprocessableEntityResponse({
-    type: ProblemDetails,
-    description: 'La corrección no es válida (p. ej. CUIT con dígito verificador incorrecto)',
-  })
+  @ApiProblemResponse(400, 'Malformed invoice id or body')
+  @ApiProblemResponse(404, 'The invoice does not exist')
+  @ApiProblemResponse(409, 'The invoice is not in the dead letter queue')
+  @ApiProblemResponse(422, 'Invalid correction, e.g. a CUIT with a wrong check digit')
   async retry(
     @Param('invoiceId', new ParseUUIDPipe()) invoiceId: string,
     @CorrelationId() requestCorrelationId: string,

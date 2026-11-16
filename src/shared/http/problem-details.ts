@@ -27,7 +27,7 @@ export interface Problem {
 /** RFC 7807 Problem Details, con `correlationId` y `errors` como miembros de extensión. */
 export class ProblemDetails implements Problem {
   @ApiProperty({
-    description: 'URI que identifica el tipo de problema',
+    description: 'URI reference that identifies the problem type',
     example: '/problems/idempotency-payload-mismatch',
   })
   type!: string;
@@ -38,16 +38,19 @@ export class ProblemDetails implements Problem {
   @ApiProperty({ example: 422 })
   status!: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Human-readable explanation of this occurrence' })
   detail?: string;
 
-  @ApiPropertyOptional({ description: 'Ruta del request que produjo el problema' })
+  @ApiPropertyOptional({ description: 'Path of the request that produced the problem' })
   instance?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Extension member: correlation id of the request' })
   correlationId?: string;
 
-  @ApiPropertyOptional({ type: [FieldErrorModel] })
+  @ApiPropertyOptional({
+    type: [FieldErrorModel],
+    description: 'Extension member: per-field errors, present on validation failures',
+  })
   errors?: readonly FieldError[];
 }
 

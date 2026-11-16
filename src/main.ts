@@ -15,9 +15,27 @@ app.enableShutdownHooks();
 
 const openApiConfig = new DocumentBuilder()
   .setTitle('LedgerFlow')
-  .setDescription('Motor asíncrono de facturación electrónica y conciliación de pagos')
+  .setDescription(
+    'Asynchronous engine for electronic invoicing and payment reconciliation.\n\n' +
+      'Every error is returned as `application/problem+json` (RFC 7807) and every response ' +
+      'carries an `x-correlation-id` header that links the logs of the whole operation.',
+  )
   .setVersion('0.1.0')
-  .addApiKey({ type: 'apiKey', in: 'header', name: ADMIN_API_KEY_HEADER }, ADMIN_API_KEY_HEADER)
+  .addTag('webhooks', 'Signed, idempotent ingestion of payment gateway events')
+  .addTag('operations', 'End-to-end traceability for reconciliation')
+  .addTag('ledger', 'Immutable double-entry ledger')
+  .addTag('admin', 'Dead letter queue inspection and manual retries')
+  .addTag('health', 'Probes')
+  .addApiKey(
+    {
+      type: 'apiKey',
+      in: 'header',
+      name: ADMIN_API_KEY_HEADER,
+      description:
+        'Value of ADMIN_API_KEY. Required by the ledger, operations and admin endpoints.',
+    },
+    ADMIN_API_KEY_HEADER,
+  )
   .build();
 SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, openApiConfig));
 

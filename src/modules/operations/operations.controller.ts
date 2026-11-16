@@ -1,14 +1,7 @@
 import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
-import {
-  ApiNotFoundResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiSecurity,
-  ApiTags,
-  ApiUnauthorizedResponse,
-} from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { ADMIN_API_KEY_HEADER, AdminApiKeyGuard } from '../../shared/http/admin-api-key.guard.js';
-import { ProblemDetails } from '../../shared/http/problem-details.js';
+import { ApiProblemResponse } from '../../shared/http/api-problem-response.js';
 import { OperationTraceDto } from './operation-trace.dto.js';
 import { OperationTraceQuery } from './operation-trace.query.js';
 
@@ -21,14 +14,16 @@ export class OperationsController {
 
   @Get(':paymentId')
   @ApiOperation({
-    summary: 'Trazabilidad completa de una operación',
+    summary: 'End-to-end trace of an operation',
     description:
-      'Webhook -> pago -> asientos contables -> factura -> intentos ante el ente fiscal -> ' +
-      'estado del job en la cola y en la DLQ.',
+      'Webhook event -> payment -> journal entries -> invoice -> every attempt against the ' +
+      'fiscal authority -> live state of the job in the queue and in the dead letter queue. ' +
+      'Combines PostgreSQL (source of truth) with Redis (live job state).',
   })
   @ApiOkResponse({ type: OperationTraceDto })
-  @ApiUnauthorizedResponse({ type: ProblemDetails })
-  @ApiNotFoundResponse({ type: ProblemDetails })
+  @ApiProblemResponse(400, 'Malformed payment id')
+  @ApiProblemResponse(401, 'Missing or invalid API key')
+  @ApiProblemResponse(404, 'No operation exists for that payment id')
   getTrace(@Param('paymentId', new ParseUUIDPipe()) paymentId: string): Promise<OperationTraceDto> {
     return this.trace.execute(paymentId);
   }
