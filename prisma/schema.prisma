@@ -1,10 +1,10 @@
-// LedgerFlow — modelo de datos.
+// LedgerFlow — data model.
 //
-// Convenciones:
-//  - PKs UUID v7 (ordenables por tiempo: buena localidad en índices B-tree).
-//  - Dinero en NUMERIC(19,4); nunca float.
-//  - Las invariantes que Prisma no puede expresar (CHECKs, triggers de inmutabilidad y de
-//    balance de doble partida) viven en la migración SQL `ledger_integrity_constraints`.
+// Conventions:
+//  - UUID v7 primary keys (time-ordered: good locality in B-tree indexes).
+//  - Money as NUMERIC(19,4); never float.
+//  - The invariants Prisma cannot express (CHECKs, immutability triggers and the
+//    double-entry balance trigger) live in the SQL migration `ledger_integrity_constraints`.
 
 generator client {
   provider            = "prisma-client"
@@ -27,9 +27,9 @@ enum PaymentProvider {
 }
 
 enum WebhookEventStatus {
-  /// Generó efectos de negocio (pago + asiento + solicitud de factura).
+  /// Produced business effects (payment + journal entry + invoice request).
   PROCESSED
-  /// Evento válido pero sin efecto contable (tipo no soportado); se conserva para auditoría.
+  /// Valid event with no accounting effect (unsupported type); kept for audit.
   IGNORED
 
   @@map("webhook_event_status")
@@ -67,13 +67,13 @@ enum LedgerTransactionType {
 }
 
 enum InvoiceStatus {
-  /// Creada en la misma transacción que el pago; aún no tomada por el worker.
+  /// Created in the same transaction as the payment; not yet taken by the worker.
   PENDING
-  /// Un worker la está tramitando ante el ente fiscal.
+  /// A worker is processing it against the fiscal authority.
   PROCESSING
-  /// Autorizada: tiene número y CAE.
+  /// Authorized: it has a number and a CAE.
   ISSUED
-  /// Agotó reintentos; el job está en la DLQ a la espera de reencolado manual.
+  /// Retries exhausted; the job is in the DLQ awaiting a manual requeue.
   DEAD_LETTERED
 
   @@map("invoice_status")
@@ -98,24 +98,24 @@ enum InvoiceAttemptOutcome {
 enum OutboxStatus {
   PENDING
   PUBLISHED
-  /// Impublicable (tipo desconocido o payload corrupto) tras agotar los intentos. El relay
-  /// deja de tomarlo; requiere intervención manual.
+  /// Unpublishable (unknown type or corrupt payload) after exhausting its attempts. The
+  /// relay stops picking it up; it requires manual intervention.
   FAILED
 
   @@map("outbox_status")
 }
 
-// ──────────────────────── Ingesta de webhooks ────────────────────────
+// ──────────────────────── Webhook ingestion ────────────────────────
 
-/// Registro de cada evento aceptado. Su constraint única es la fuente de verdad de la
-/// idempotencia: N entregas concurrentes del mismo evento compiten por un único INSERT.
+/// Record of every accepted event. Its unique constraint is the source of truth for
+/// idempotency: N concurrent deliveries of the same event compete for a single INSERT.
 model WebhookEvent {
   id            String             @id @default(uuid(7)) @db.Uuid
   provider      PaymentProvider
-  /// Clave de idempotencia emitida por la pasarela.
+  /// Idempotency key issued by the gateway.
   eventId       String             @map("event_id") @db.VarChar(128)
   eventType     String             @map("event_type") @db.VarChar(64)
-  /// SHA-256 del cuerpo crudo: detecta reutilización de la misma clave con otro payload.
+  /// SHA-256 of the raw body: detects reuse of the same key with a different payload.
   payloadHash   String             @map("payload_hash") @db.Char(64)
   payload       Json
   status        WebhookEventStatus
@@ -131,11 +131,11 @@ model WebhookEvent {
 
 model Payment {
   id                String          @id @default(uuid(7)) @db.Uuid
-  /// Evento que originó el pago (trazabilidad Webhook -> Pago).
+  /// Event that originated the payment (Webhook -> Payment traceability).
   webhookEventId    String          @unique @map("webhook_event_id") @db.Uuid
   provider          PaymentProvider
-  /// Identificador del pago en la pasarela. Segunda línea de defensa contra duplicados:
-  /// dos eventos distintos sobre el mismo pago no pueden crear dos cobros.
+  /// Payment identifier in the gateway. Second line of defense against duplicates:
+  /// two different events about the same payment cannot create two charges.
   externalPaymentId String          @map("external_payment_id") @db.VarChar(128)
   status            PaymentStatus   @default(APPROVED)
   amount            Decimal         @db.Decimal(19, 4)
@@ -155,15 +155,15 @@ model Payment {
   @@map("payments")
 }
 
-// ───────────────────── Libro mayor (doble partida) ─────────────────────
+// ───────────────────── General ledger (double entry) ─────────────────────
 
-/// Plan de cuentas. Datos de referencia sembrados por migración.
+/// Chart of accounts. Reference data seeded by migration.
 model LedgerAccount {
   id            String            @id @default(uuid(7)) @db.Uuid
   code          String            @unique @db.VarChar(64)
   name          String            @db.VarChar(200)
   type          LedgerAccountType
-  /// Lado en el que la cuenta aumenta; define el signo del saldo.
+  /// Side on which the account increases; it defines the sign of the balance.
   normalBalance EntryDirection    @map("normal_balance")
   createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
 
@@ -172,15 +172,15 @@ model LedgerAccount {
   @@map("ledger_accounts")
 }
 
-/// Asiento contable (cabecera). Append-only: se corrige con un asiento de reversa, nunca
-/// con UPDATE/DELETE (bloqueados por trigger).
+/// Journal entry (header). Append-only: it is corrected with a reversing entry, never
+/// with UPDATE/DELETE (blocked by trigger).
 model LedgerTransaction {
   id            String                @id @default(uuid(7)) @db.Uuid
   paymentId     String                @map("payment_id") @db.Uuid
   type          LedgerTransactionType
   description   String                @db.VarChar(500)
   correlationId String                @map("correlation_id") @db.VarChar(64)
-  /// Asiento que este revierte, si aplica. Único: un asiento se revierte a lo sumo una vez.
+  /// Entry that this one reverses, if any. Unique: an entry is reversed at most once.
   reversesId    String?               @unique @map("reverses_id") @db.Uuid
   postedAt      DateTime              @default(now()) @map("posted_at") @db.Timestamptz(3)
 
@@ -189,14 +189,14 @@ model LedgerTransaction {
   reversedBy LedgerTransaction? @relation("LedgerReversal")
   entries    LedgerEntry[]
 
-  /// Un pago admite un único asiento de cada tipo (captura, reembolso).
+  /// A payment admits a single entry of each type (capture, refund).
   @@unique([paymentId, type], map: "ledger_transactions_payment_id_type_key")
   @@index([postedAt])
   @@map("ledger_transactions")
 }
 
-/// Línea de asiento. `amount` siempre positivo; el signo lo da `direction`.
-/// Invariante (trigger diferido al COMMIT): por asiento y moneda, Σ débitos = Σ créditos.
+/// Journal entry line. `amount` is always positive; `direction` gives the sign.
+/// Invariant (trigger deferred to COMMIT): per entry and currency, Σ debits = Σ credits.
 model LedgerEntry {
   id            String         @id @default(uuid(7)) @db.Uuid
   transactionId String         @map("transaction_id") @db.Uuid
@@ -210,21 +210,21 @@ model LedgerEntry {
   account     LedgerAccount     @relation(fields: [accountId], references: [id], onDelete: Restrict)
 
   @@index([transactionId])
-  /// Cubre el cálculo de saldo y el extracto de una cuenta por moneda, en orden cronológico.
+  /// Covers the balance calculation and the per-currency statement of an account, in order.
   @@index([accountId, currency, id])
   @@map("ledger_entries")
 }
 
-// ───────────────────────── Facturación fiscal ─────────────────────────
+// ───────────────────────── Fiscal invoicing ─────────────────────────
 
 model Invoice {
   id            String        @id @default(uuid(7)) @db.Uuid
-  /// Único: un pago genera exactamente un comprobante.
+  /// Unique: a payment produces exactly one invoice.
   paymentId     String        @unique @map("payment_id") @db.Uuid
   status        InvoiceStatus @default(PENDING)
   type          InvoiceType
   pointOfSale   Int           @map("point_of_sale")
-  /// Numeración asignada por el ente fiscal al autorizar.
+  /// Number assigned by the fiscal authority when it authorizes the invoice.
   number        Int?
   cae           String?       @db.VarChar(14)
   caeExpiresAt  DateTime?     @map("cae_expires_at") @db.Date
@@ -234,7 +234,7 @@ model Invoice {
   currency      String        @db.Char(3)
   attemptCount  Int           @default(0) @map("attempt_count")
   lastError     String?       @map("last_error") @db.VarChar(1000)
-  /// Bloqueo optimista: toda transición de estado hace `WHERE version = ?` e incrementa.
+  /// Optimistic lock: every state transition does `WHERE version = ?` and increments it.
   version       Int           @default(0)
   correlationId String        @map("correlation_id") @db.VarChar(64)
   issuedAt      DateTime?     @map("issued_at") @db.Timestamptz(3)
@@ -245,23 +245,23 @@ model Invoice {
   attempts    InvoiceAttempt[]
   corrections InvoiceCorrection[]
 
-  /// La numeración fiscal no puede repetirse (NULLs no colisionan mientras no se emite).
+  /// The fiscal number cannot repeat (NULLs do not collide while the invoice is not issued).
   @@unique([pointOfSale, type, number], map: "invoices_point_of_sale_type_number_key")
-  /// Monitoreo operativo: comprobantes trabados por estado y antigüedad.
+  /// Operational monitoring: invoices stuck, by status and age.
   @@index([status, createdAt])
   @@map("invoices")
 }
 
-/// Bitácora append-only de cada intento contra el ente fiscal (trazabilidad Job -> Comprobante).
+/// Append-only log of every attempt against the fiscal authority (Job -> Invoice trace).
 model InvoiceAttempt {
   id            String                @id @default(uuid(7)) @db.Uuid
   invoiceId     String                @map("invoice_id") @db.Uuid
   jobId         String                @map("job_id") @db.VarChar(128)
   attemptNumber Int                   @map("attempt_number")
   outcome       InvoiceAttemptOutcome
-  /// Código HTTP devuelto por el ente fiscal; NULL si no hubo respuesta (timeout).
+  /// HTTP status returned by the fiscal authority; NULL if there was no response (timeout).
   httpStatus    Int?                  @map("http_status")
-  /// Cuerpo de la respuesta del ente fiscal (autorización o detalle del rechazo).
+  /// Body of the fiscal authority response (authorization or rejection detail).
   response      Json?
   errorCode     String?               @map("error_code") @db.VarChar(64)
   errorMessage  String?               @map("error_message") @db.VarChar(1000)
@@ -274,8 +274,8 @@ model InvoiceAttempt {
   @@map("invoice_attempts")
 }
 
-/// Bitácora append-only de correcciones manuales de datos fiscales, aplicadas al reencolar
-/// una factura desde la DLQ. Responde quién cambió qué, cuándo y por qué.
+/// Append-only log of manual corrections of fiscal data, applied when an invoice is
+/// requeued from the DLQ. It answers who changed what, when and why.
 model InvoiceCorrection {
   id            String   @id @default(uuid(7)) @db.Uuid
   invoiceId     String   @map("invoice_id") @db.Uuid
@@ -283,7 +283,7 @@ model InvoiceCorrection {
   previousValue String?  @map("previous_value") @db.VarChar(200)
   newValue      String   @map("new_value") @db.VarChar(200)
   reason        String?  @db.VarChar(500)
-  /// correlationId del request administrativo que aplicó la corrección.
+  /// correlationId of the admin request that applied the correction.
   correlationId String   @map("correlation_id") @db.VarChar(64)
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
@@ -295,8 +295,8 @@ model InvoiceCorrection {
 
 // ─────────────────────── Transactional outbox ───────────────────────
 
-/// Mensajes a publicar en BullMQ, escritos en la misma transacción que el pago. Evita el
-/// dual-write Postgres/Redis: si la transacción confirma, el job se encola al menos una vez.
+/// Messages to publish to BullMQ, written in the same transaction as the payment. Avoids
+/// the Postgres/Redis dual write: if the transaction commits, the job is enqueued at least once.
 model OutboxEvent {
   id            String       @id @default(uuid(7)) @db.Uuid
   type          String       @db.VarChar(64)
@@ -309,7 +309,7 @@ model OutboxEvent {
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   publishedAt   DateTime?    @map("published_at") @db.Timestamptz(3)
 
-  /// El relay lee `WHERE status = 'PENDING' ORDER BY created_at ... FOR UPDATE SKIP LOCKED`.
+  /// The relay reads `WHERE status = 'PENDING' ORDER BY created_at ... FOR UPDATE SKIP LOCKED`.
   @@index([status, createdAt])
   @@map("outbox_events")
 }

@@ -7,7 +7,7 @@ export default {
   testRegex: '.*\\.spec\\.ts$',
   extensionsToTreatAsEsm: ['.ts'],
   moduleNameMapper: {
-    // Los imports ESM terminan en `.js`; Jest debe resolverlos al `.ts` fuente.
+    // ESM imports end in `.js`; Jest must resolve them to the `.ts` source.
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   transform: {

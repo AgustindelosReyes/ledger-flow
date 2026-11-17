@@ -4,26 +4,26 @@
 FROM node:24-alpine AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
-# openssl: requerido por el schema engine de Prisma (migraciones).
+# openssl: required by the Prisma schema engine (migrations).
 RUN apk add --no-cache openssl && npm install --global pnpm@12.16.1
 WORKDIR /app
 
-# ── deps: todas las dependencias (incluye dev) ──
+# ── deps: all dependencies (including dev) ──
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile
 
-# ── build: genera el cliente Prisma y compila. También es la imagen del job de migraciones ──
+# ── build: generates the Prisma client and compiles. Also the image of the migration job ──
 FROM deps AS build
 COPY . .
 RUN pnpm prisma generate && pnpm build
 
-# ── prod-deps: solo dependencias de runtime ──
+# ── prod-deps: runtime dependencies only ──
 FROM base AS prod-deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --prod
 
-# ── runtime: imagen final mínima, sin toolchain ni usuario root ──
+# ── runtime: minimal final image, with no toolchain and no root user ──
 FROM node:24-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app

@@ -1,4 +1,4 @@
-# pnpm bloquea scripts de instalación por defecto; se habilitan solo los necesarios.
+# pnpm blocks install scripts by default; only the required ones are enabled.
 allowBuilds:
   '@prisma/engines': true
   prisma: true

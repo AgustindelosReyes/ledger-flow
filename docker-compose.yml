@@ -1,5 +1,5 @@
-# Levanta todo el stack con:  cp .env.example .env && docker compose up --build
-# Solo infraestructura (para correr la app en el host):  docker compose up -d postgres redis
+# Start the whole stack with:  cp .env.example .env && docker compose up --build
+# Infrastructure only (to run the app on the host):  docker compose up -d postgres redis
 name: ledger-flow
 
 services:
@@ -23,7 +23,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    # noeviction: BullMQ no tolera que Redis descarte claves bajo presión de memoria.
+    # noeviction: BullMQ cannot tolerate Redis evicting keys under memory pressure.
     command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
     ports:
       - '${REDIS_HOST_PORT:-6379}:6379'
@@ -35,7 +35,7 @@ services:
       timeout: 3s
       retries: 10
 
-  # Job de un solo disparo: aplica migraciones pendientes y termina.
+  # One-shot job: applies pending migrations and exits.
   migrate:
     build:
       context: .
@@ -55,9 +55,9 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      # La imagen de runtime solo trae dependencias de producción (sin pino-pretty).
+      # The runtime image only ships production dependencies (no pino-pretty).
       NODE_ENV: production
-      # Dentro de la red de compose los hosts son los nombres de servicio.
+      # Inside the compose network, hosts are the service names.
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
       REDIS_HOST: redis

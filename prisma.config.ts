@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { defineConfig } from 'prisma/config';
 
-// Las variables ya presentes en el entorno (CI, Docker) tienen prioridad sobre `.env`.
+// Variables already present in the environment (CI, Docker) take priority over `.env`.
 if (existsSync('.env')) {
   process.loadEnvFile('.env');
 }
@@ -12,7 +12,7 @@ export default defineConfig({
     path: 'prisma/migrations',
   },
   datasource: {
-    // `prisma generate` no necesita conexión; `migrate` falla con un mensaje claro si falta.
+    // `prisma generate` needs no connection; `migrate` fails with a clear message if missing.
     url: process.env.DATABASE_URL ?? '',
   },
 });

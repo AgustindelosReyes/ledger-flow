@@ -23,7 +23,7 @@ export default defineConfig(
       reportUnusedDisableDirectives: 'error',
     },
     rules: {
-      // Seguridad de tipos: sin `any`, sin supresiones, sin aserciones `as` (salvo `as const`).
+      // Type safety: no `any`, no suppressions, no `as` assertions (except `as const`).
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
       '@typescript-eslint/no-non-null-assertion': 'error',
@@ -41,7 +41,7 @@ export default defineConfig(
         { argsIgnorePattern: '^_', ignoreRestSiblings: true },
       ],
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
-      // Los módulos, controladores y DTOs de NestJS son clases decoradas sin miembros propios.
+      // NestJS modules, controllers and DTOs are decorated classes with no members of their own.
       '@typescript-eslint/no-extraneous-class': ['error', { allowWithDecorator: true }],
 
       'no-console': 'error',
