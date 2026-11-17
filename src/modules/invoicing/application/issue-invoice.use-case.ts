@@ -14,15 +14,15 @@ import type {
 export interface IssueInvoiceCommand {
   readonly invoiceId: string;
   readonly jobId: string;
-  /** Último intento que la cola concederá a este job: si falla, es falla definitiva. */
+  /** Last attempt the queue will grant this job: if it fails, the failure is permanent. */
   readonly isFinalAttempt: boolean;
 }
 
 export type IssueInvoiceResult =
   | { readonly outcome: 'issued'; readonly number: number; readonly cae: string }
-  /** Guarda de idempotencia: la factura ya tenía CAE; no se llamó al ente fiscal. */
+  /** Idempotency guard: the invoice already had a CAE; the authority was not called. */
   | { readonly outcome: 'already_issued' }
-  /** La factura ya está en falla definitiva; solo un reencolado manual la reactiva. */
+  /** The invoice already failed permanently; only a manual requeue reactivates it. */
   | { readonly outcome: 'dead_lettered'; readonly invoice: InvoiceSnapshot };
 
 export interface IssuanceSettings {
@@ -56,8 +56,8 @@ export class IssueInvoiceUseCase {
       });
     }
 
-    // Guardas previas a cualquier efecto externo. Un job puede llegar repetido (BullMQ es
-    // at-least-once; un job "stalled" se reentrega): nunca debe pedirse un segundo CAE.
+    // Guards that run before any external effect. A job can arrive more than once (BullMQ is
+    // at-least-once; a "stalled" job is redelivered): a second CAE must never be requested.
     if (invoice.status === 'ISSUED') {
       return { outcome: 'already_issued' };
     }
@@ -93,8 +93,8 @@ export class IssueInvoiceUseCase {
       authorization,
     );
     if (!recorded) {
-      // Otro proceso avanzó la factura mientras se esperaba al ente. El ente es idempotente
-      // por `invoiceId`, así que el reintento obtendrá esta misma autorización.
+      // Another process moved the invoice forward while waiting for the authority. The
+      // authority is idempotent by `invoiceId`, so the retry will get this same authorization.
       throw this.concurrentModification(claimed);
     }
 
@@ -102,8 +102,8 @@ export class IssueInvoiceUseCase {
   }
 
   /**
-   * El timeout se impone aquí y no se delega en el adaptador: aunque una implementación
-   * ignore la señal, el intento termina a tiempo y libera el slot del worker.
+   * The timeout is enforced here rather than delegated to the adapter: even if an
+   * implementation ignores the signal, the attempt ends on time and frees the worker slot.
    */
   private authorizeWithTimeout(invoice: InvoiceSnapshot): Promise<FiscalAuthorization> {
     const { requestTimeoutMs } = this.settings;
@@ -133,8 +133,8 @@ export class IssueInvoiceUseCase {
         signal,
       )
       .catch((error: unknown) => {
-        // Un adaptador que aborta al vencer el plazo falla con su propio error (AbortError,
-        // socket cerrado...): se normaliza a timeout para clasificarlo siempre igual.
+        // An adapter that aborts when the deadline expires fails with its own error (AbortError,
+        // socket closed...): it is normalized to a timeout so it is always classified the same.
         if (signal.aborted && !(error instanceof FiscalAuthorityError)) {
           throw new FiscalTimeoutError(requestTimeoutMs);
         }
@@ -183,7 +183,7 @@ export class IssueInvoiceUseCase {
     });
   }
 
-  /** Transitorio: en el próximo intento se relee el estado y las guardas deciden. */
+  /** Transient: on the next attempt the state is read again and the guards decide. */
   private concurrentModification(invoice: InvoiceSnapshot): InvoiceIssuanceFailedError {
     return new InvoiceIssuanceFailedError({
       message: `Invoice "${invoice.id}" was modified concurrently by another process`,
@@ -211,8 +211,8 @@ function classify(error: unknown): ClassifiedFailure {
       httpStatus: error.httpStatus,
     };
   }
-  // Fallo no previsto (red, bug del adaptador): se asume transitorio. Si persiste, el
-  // límite de intentos lo lleva igualmente a la DLQ.
+  // Unforeseen failure (network, adapter bug): assumed to be transient. If it persists,
+  // the attempt limit sends it to the DLQ anyway.
   return {
     errorCode: UNEXPECTED_ERROR,
     message: error instanceof Error ? error.message : 'Unknown error',

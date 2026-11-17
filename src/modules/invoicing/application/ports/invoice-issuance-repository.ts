@@ -8,7 +8,7 @@ export interface InvoiceSnapshot {
   readonly id: string;
   readonly paymentId: string;
   readonly status: InvoiceStatus;
-  /** Versión leída: toda escritura posterior la exige (bloqueo optimista). */
+  /** Version that was read: every later write requires it (optimistic locking). */
   readonly version: number;
   readonly attemptCount: number;
   readonly type: InvoiceType;
@@ -30,13 +30,13 @@ export interface AttemptRecord {
   readonly response: JsonObject | null;
 }
 
-/** Corrección de datos fiscales ya validada, a aplicar junto con el reencolado. */
+/** Already validated correction of fiscal data, to apply together with the requeue. */
 export interface FiscalDataCorrection {
   readonly payerTaxId: string;
-  /** Clase de comprobante que corresponde al nuevo identificador fiscal. */
+  /** Invoice type that corresponds to the new tax id. */
   readonly invoiceType: InvoiceType;
   readonly reason: string | undefined;
-  /** correlationId del request administrativo, para la bitácora de auditoría. */
+  /** correlationId of the admin request, for the audit log. */
   readonly requestCorrelationId: string;
 }
 
@@ -58,26 +58,29 @@ export type RequeueOutcome =
   | { readonly kind: 'not_dead_lettered'; readonly status: InvoiceStatus };
 
 /**
- * Persistencia de la emisión. Todas las transiciones de estado son condicionales a la
- * versión leída: devuelven `null`/`false` si otro proceso modificó la factura entretanto.
+ * Persistence of the issuance. Every state transition is conditional on the version that
+ * was read: it returns `null`/`false` if another process modified the invoice meanwhile.
  */
 export abstract class InvoiceIssuanceRepository {
   abstract find(invoiceId: string): Promise<InvoiceSnapshot | null>;
 
   /**
-   * Toma la factura para un intento: `PENDING|PROCESSING -> PROCESSING`, incrementando
-   * `version` y `attemptCount`. Devuelve el nuevo snapshot, o `null` si perdió la carrera.
+   * Takes the invoice for an attempt: `PENDING|PROCESSING -> PROCESSING`, incrementing
+   * `version` and `attemptCount`. Returns the new snapshot, or `null` if it lost the race.
    */
   abstract claim(invoice: InvoiceSnapshot): Promise<InvoiceSnapshot | null>;
 
-  /** Registra el intento exitoso y pasa a `ISSUED` con número y CAE. */
+  /** Records the successful attempt and moves to `ISSUED` with number and CAE. */
   abstract recordSuccess(
     claimed: InvoiceSnapshot,
     attempt: AttemptRecord,
     authorization: FiscalAuthorization,
   ): Promise<boolean>;
 
-  /** Registra el intento fallido y pasa a `PENDING` (se reintentará) o `DEAD_LETTERED`. */
+  /**
+   * Records the failed attempt and moves to `PENDING` (it will be retried) or
+   * `DEAD_LETTERED`.
+   */
   abstract recordFailure(
     claimed: InvoiceSnapshot,
     attempt: AttemptRecord,
@@ -85,11 +88,11 @@ export abstract class InvoiceIssuanceRepository {
   ): Promise<boolean>;
 
   /**
-   * Reencolado manual: `DEAD_LETTERED -> PENDING` y un nuevo mensaje de outbox, en una
-   * única transacción. Dos llamadas concurrentes no pueden reencolar dos veces.
+   * Manual requeue: `DEAD_LETTERED -> PENDING` plus a new outbox message, in a single
+   * transaction. Two concurrent calls cannot requeue twice.
    *
-   * Si se indica una corrección, en la misma transacción se actualiza el dato fiscal y se
-   * deja constancia en la bitácora de correcciones: o se aplica todo, o nada.
+   * If a correction is given, the fiscal data is updated and the change is written to the
+   * correction log in that same transaction: either everything is applied, or nothing.
    */
   abstract requeueDeadLettered(
     invoiceId: string,

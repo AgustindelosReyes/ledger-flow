@@ -40,8 +40,8 @@ import { RuntimeRolesModule } from './shared/runtime/runtime-roles.js';
   ],
   controllers: [HealthController],
   providers: [
-    // Registrados como providers (no en main.ts) para que los tests e2e, que arman la app
-    // desde AppModule, ejerciten exactamente el mismo pipeline HTTP que producción.
+    // Registered as providers (not in main.ts) so that the e2e tests, which build the app
+    // from AppModule, exercise exactly the same HTTP pipeline as production.
     { provide: APP_PIPE, useFactory: createValidationPipe },
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },
   ],

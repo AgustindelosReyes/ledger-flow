@@ -32,8 +32,8 @@ interface JournalEntryParams {
 }
 
 /**
- * Asiento contable de doble partida, válido por construcción: no existe una instancia
- * desbalanceada. La base repite la verificación al COMMIT como última línea de defensa.
+ * Double-entry journal entry, valid by construction: an unbalanced instance cannot exist.
+ * The database repeats the check at COMMIT as the last line of defense.
  */
 export class JournalEntry {
   private constructor(
@@ -53,7 +53,7 @@ export class JournalEntry {
       throw new InvalidJournalEntryError('Every journal line amount must be greater than zero');
     }
 
-    // `Money.add` rechaza la mezcla de monedas, por lo que sumar también valida ese invariante.
+    // `Money.add` rejects mixed currencies, so summing also validates that invariant.
     const { currency } = first.amount;
     const sum = (direction: EntryDirection): Money =>
       lines

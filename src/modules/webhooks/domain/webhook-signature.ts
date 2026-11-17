@@ -1,12 +1,12 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
- * Esquema de firma (mismo diseño que Stripe):
+ * Signature scheme (same design as Stripe):
  *
  *   x-signature: t=<unix seconds>,v1=<hex(HMAC-SHA256(secret, "<t>." + rawBody))>
  *
- * El timestamp forma parte de lo firmado, por lo que no puede alterarse sin invalidar la
- * firma; combinado con la ventana de tolerancia acota los ataques de replay.
+ * The timestamp is part of the signed content, so it cannot be altered without
+ * invalidating the signature; combined with the tolerance window it bounds replay attacks.
  */
 export const SIGNATURE_HEADER = 'x-signature';
 
@@ -23,7 +23,7 @@ function computeDigest(secret: string, timestamp: string, rawBody: Buffer): Buff
   return createHmac('sha256', secret).update(`${timestamp}.`).update(rawBody).digest();
 }
 
-/** Construye el valor del header. Lo usan los emisores (y los tests) para firmar. */
+/** Builds the header value. Senders (and the tests) use it to sign. */
 export function signWebhookPayload(
   secret: string,
   timestampSeconds: number,
@@ -56,7 +56,7 @@ function parseHeader(header: string): { timestamp: string; signature: string } |
 
 interface VerifyParams {
   readonly header: string | undefined;
-  /** Bytes exactos recibidos por HTTP. Nunca una re-serialización del JSON parseado. */
+  /** Exact bytes received over HTTP. Never a re-serialization of the parsed JSON. */
   readonly rawBody: Buffer;
   readonly secret: string;
   readonly toleranceSeconds: number;
@@ -78,9 +78,9 @@ export function verifyWebhookSignature({
     return { valid: false, reason: 'malformed_header' };
   }
 
-  // Ambos buffers miden 32 bytes (lo garantiza el patrón del header), precondición de
-  // `timingSafeEqual`. La comparación en tiempo constante evita filtrar por timing cuántos
-  // bytes iniciales de la firma son correctos.
+  // Both buffers are 32 bytes long (guaranteed by the header pattern), a precondition of
+  // `timingSafeEqual`. The constant-time comparison avoids leaking through timing how many
+  // leading bytes of the signature are correct.
   const expected = computeDigest(secret, parsed.timestamp, rawBody);
   const provided = Buffer.from(parsed.signature, 'hex');
   if (!timingSafeEqual(expected, provided)) {

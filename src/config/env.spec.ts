@@ -70,7 +70,7 @@ describe('validateEnv', () => {
     expect(
       validateEnv({ ...validEnv, OUTBOX_RELAY_ENABLED: 'false', INVOICE_WORKER_ENABLED: 'false' }),
     ).toMatchObject({ OUTBOX_RELAY_ENABLED: false, INVOICE_WORKER_ENABLED: false });
-    // "0", "no" o "FALSE" no se interpretan en silencio como verdadero: son un error.
+    // "0", "no" or "FALSE" are not silently read as true: they are an error.
     expect(() => validateEnv({ ...validEnv, INVOICE_WORKER_ENABLED: '0' })).toThrow(
       'INVOICE_WORKER_ENABLED',
     );

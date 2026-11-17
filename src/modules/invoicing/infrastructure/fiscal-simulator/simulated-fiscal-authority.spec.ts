@@ -10,7 +10,7 @@ import { AuthorizationRegistry, type AuthorizationProposal } from './authorizati
 import { FaultInjector, RandomFaultInjector, type SimulatedFault } from './fault-injector.js';
 import { SimulatedFiscalAuthority } from './simulated-fiscal-authority.js';
 
-/** Mismo contrato que el registro en Redis: numeración correlativa e idempotencia. */
+/** Same contract as the Redis registry: consecutive numbering and idempotency. */
 class InMemoryAuthorizationRegistry extends AuthorizationRegistry {
   private readonly authorizations = new Map<string, FiscalAuthorization>();
   private readonly sequences = new Map<string, number>();
@@ -102,7 +102,7 @@ describe('SimulatedFiscalAuthority', () => {
     await expect(authority.authorize(request(), never)).rejects.toThrow(
       FiscalServiceUnavailableError,
     );
-    // La numeración no avanzó: la siguiente solicitud recibe el número 1.
+    // The numbering did not advance: the next request gets number 1.
     expect((await authority.authorize(request(), never)).number).toBe(1);
   });
 
@@ -131,7 +131,7 @@ describe('SimulatedFiscalAuthority', () => {
 
     const retried = await authority.authorize(request(), never);
     expect(retried.number).toBe(1);
-    // Solo se consumió un número: el siguiente comprobante es el 2.
+    // Only one number was consumed: the next invoice is number 2.
     expect((await authority.authorize(request({ invoiceId: 'invoice-2' }), never)).number).toBe(2);
   });
 

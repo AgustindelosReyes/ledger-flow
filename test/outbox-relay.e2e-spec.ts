@@ -8,8 +8,8 @@ import { acceptedAckOf, type AcceptedAck } from './support/responses.js';
 import { buildPaymentEvent, createTestApp, type TestApp } from './support/test-app.js';
 
 /**
- * El relay y el worker automáticos están apagados: el test invoca al relay a mano para
- * controlar el momento exacto de cada publicación, y nadie consume los jobs.
+ * The automatic relay and worker are off: the test invokes the relay by hand to control
+ * the exact moment of each publication, and nobody consumes the jobs.
  */
 describe('Outbox relay (e2e)', () => {
   let t: TestApp;
@@ -73,8 +73,8 @@ describe('Outbox relay (e2e)', () => {
     const ack = await pay('relay-crash-0001');
     const pending = await outboxOf(ack.invoiceId);
 
-    // Estado que deja un relay que murió a mitad de camino: el job ya está en Redis, pero
-    // el evento sigue PENDING en Postgres.
+    // State left by a relay that died halfway: the job is already in Redis, but the
+    // event is still PENDING in Postgres.
     await queue.add(
       ISSUE_INVOICE_JOB,
       { invoiceId: ack.invoiceId, paymentId: ack.paymentId, correlationId: 'relay-crash-0001' },
@@ -82,10 +82,10 @@ describe('Outbox relay (e2e)', () => {
     );
     const jobsBefore = await queuedJobs();
 
-    // Al recuperarse, el relay republica el evento...
+    // On recovery, the relay republishes the event...
     expect(await relay.publishPending()).toBe(1);
 
-    // ...pero BullMQ descarta el `add` con un jobId existente: sigue habiendo un solo job.
+    // ...but BullMQ drops the `add` with an existing jobId: there is still one job.
     expect(await queuedJobs()).toBe(jobsBefore);
     expect((await outboxOf(ack.invoiceId)).status).toBe('PUBLISHED');
   });
@@ -96,7 +96,7 @@ describe('Outbox relay (e2e)', () => {
     );
     const jobsBefore = await queuedJobs();
 
-    // Cinco relays simultáneos: FOR UPDATE SKIP LOCKED reparte los eventos entre ellos.
+    // Five simultaneous relays: FOR UPDATE SKIP LOCKED splits the events among them.
     const published = await Promise.all(Array.from({ length: 5 }, () => relay.publishPending()));
 
     expect(published.reduce((total, count) => total + count, 0)).toBe(8);
@@ -130,7 +130,7 @@ describe('Outbox relay (e2e)', () => {
       const poison = await createEvent('unknown.event', {});
       const ack = await pay('relay-poison-neighbour');
 
-      // El evento envenenado no bloquea al evento válido que comparte el lote.
+      // The poison event does not block the valid event that shares the batch.
       expect(await relay.publishPending()).toBe(1);
       expect((await outboxOf(ack.invoiceId)).status).toBe('PUBLISHED');
       expect(await stateOf(poison.id)).toMatchObject({ status: 'PENDING', attempts: 1 });
@@ -145,7 +145,7 @@ describe('Outbox relay (e2e)', () => {
       expect(failed).toMatchObject({ status: 'FAILED', attempts: MAX_ATTEMPTS });
       expect(failed.lastError).toContain('unknown.event');
 
-      // Ya no se toma: el contador no vuelve a moverse.
+      // It is no longer picked up: the counter does not move again.
       await relay.publishPending();
       expect(await stateOf(poison.id)).toMatchObject({ status: 'FAILED', attempts: MAX_ATTEMPTS });
     });

@@ -1,8 +1,8 @@
 import type { Response } from 'supertest';
 import { z } from 'zod';
 
-// `response.body` de supertest es `any`. Estos parsers lo convierten en un valor tipado y,
-// de paso, verifican el contrato de cada respuesta.
+// supertest's `response.body` is `any`. These parsers turn it into a typed value and, in
+// passing, verify the contract of each response.
 
 const ackSchema = z.strictObject({
   status: z.enum(['accepted', 'duplicate', 'ignored']),
@@ -50,7 +50,7 @@ export function ackOf(response: Response): Ack {
   return ackSchema.parse(response.body);
 }
 
-/** Ack de un pago contabilizado: todos los identificadores están presentes. */
+/** Ack of a booked payment: every identifier is present. */
 export function acceptedAckOf(response: Response): AcceptedAck {
   const { paymentId, ledgerTransactionId, invoiceId, ...rest } = ackOf(response);
   if (paymentId === null || ledgerTransactionId === null || invoiceId === null) {

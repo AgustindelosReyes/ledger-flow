@@ -24,14 +24,14 @@ export class InvalidFiscalCorrectionError extends DomainError {
 }
 
 /**
- * Resultado fallido de un intento de emisión, ya persistido en la bitácora. Le dice al
- * adaptador de la cola qué hacer: reintentar, o dar el job por terminado.
+ * Failed outcome of an issuance attempt, already persisted in the attempt log. It tells
+ * the queue adapter what to do: retry, or consider the job finished.
  */
 export class InvoiceIssuanceFailedError extends Error {
   readonly errorCode: string;
-  /** `false`: reintentar no sirve; el job debe fallar de forma definitiva de inmediato. */
+  /** `false`: retrying is pointless; the job must fail permanently right away. */
   readonly retryable: boolean;
-  /** `true`: la factura quedó en `DEAD_LETTERED` y debe publicarse en la DLQ. */
+  /** `true`: the invoice is now `DEAD_LETTERED` and must be published to the DLQ. */
   readonly deadLettered: boolean;
   readonly attemptCount: number;
 

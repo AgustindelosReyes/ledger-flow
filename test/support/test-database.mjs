@@ -3,8 +3,9 @@ import { existsSync } from 'node:fs';
 const TEST_SUFFIX = '_test';
 
 /**
- * Los tests e2e nunca corren contra la base de desarrollo: usan `TEST_DATABASE_URL` si está
- * definida o, si no, la base de `DATABASE_URL` con sufijo `_test` en el mismo servidor.
+ * The e2e tests never run against the development database: they use `TEST_DATABASE_URL`
+ * if set or, otherwise, the `DATABASE_URL` database with a `_test` suffix on the same
+ * server.
  */
 export function resolveTestDatabaseUrl() {
   if (existsSync('.env')) {
@@ -19,14 +20,15 @@ export function resolveTestDatabaseUrl() {
   if (!process.env.TEST_DATABASE_URL && !url.pathname.endsWith(TEST_SUFFIX)) {
     url.pathname += TEST_SUFFIX;
   }
-  // El setup global vacía esta base: se exige el sufijo para no borrar nunca otra.
+  // The global setup empties this database: the suffix is required so that no other
+  // database can ever be wiped.
   if (!url.pathname.endsWith(TEST_SUFFIX)) {
     throw new Error(`Refusing to run e2e tests: database "${url.pathname}" must end in "_test"`);
   }
   return url.toString();
 }
 
-/** Base lógica de Redis reservada para tests; el setup global la vacía. */
+/** Redis logical database reserved for tests; the global setup flushes it. */
 export function resolveTestRedisDb() {
   const db = Number(process.env.TEST_REDIS_DB ?? '15');
   if (!Number.isInteger(db) || db < 1 || db > 15) {

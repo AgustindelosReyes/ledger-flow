@@ -1,14 +1,14 @@
 import { z } from 'zod';
 
-/** Cola principal: emisión de comprobantes ante el ente fiscal. */
+/** Main queue: issuance of invoices against the fiscal authority. */
 export const FISCAL_INVOICE_QUEUE = 'fiscal-invoices';
-/** Dead Letter Queue: comprobantes en falla definitiva, a la espera de reencolado manual. */
+/** Dead Letter Queue: invoices that failed permanently, awaiting a manual requeue. */
 export const FISCAL_INVOICE_DLQ = 'fiscal-invoices-dlq';
 
 export const ISSUE_INVOICE_JOB = 'issue-invoice';
 export const DEAD_LETTER_JOB = 'dead-letter';
 
-/** Tipo de mensaje de outbox que el relay traduce en un job `issue-invoice`. */
+/** Outbox message type that the relay turns into an `issue-invoice` job. */
 export const INVOICE_REQUESTED_EVENT = 'invoice.requested';
 
 export const invoiceRequestedPayloadSchema = z.object({
@@ -16,7 +16,7 @@ export const invoiceRequestedPayloadSchema = z.object({
   paymentId: z.uuid(),
 });
 
-/** El `correlationId` del webhook original viaja en el job para enlazar los logs. */
+/** The `correlationId` of the original webhook travels in the job to link the logs. */
 export const issueInvoiceJobDataSchema = invoiceRequestedPayloadSchema.extend({
   correlationId: z.string().min(1),
 });

@@ -14,9 +14,9 @@ import type {
 
 export interface RetryDeadLetteredInvoiceCommand {
   readonly invoiceId: string;
-  /** correlationId del request administrativo. */
+  /** correlationId of the admin request. */
   readonly requestCorrelationId: string;
-  /** Datos fiscales corregidos; sin ellos, la factura se reencola tal como está. */
+  /** Corrected fiscal data; without it, the invoice is requeued as it is. */
   readonly correction?: {
     readonly payerTaxId: string;
     readonly reason: string | undefined;
@@ -26,7 +26,7 @@ export interface RetryDeadLetteredInvoiceCommand {
 export interface RetryDeadLetteredInvoiceResult {
   readonly invoiceId: string;
   readonly outboxEventId: string;
-  /** correlationId del webhook original: el reintento continúa la misma traza. */
+  /** correlationId of the original webhook: the retry continues the same trace. */
   readonly correlationId: string;
   readonly correction: AppliedCorrection | null;
 }
@@ -35,15 +35,15 @@ const DNI_PATTERN = /^\d{7,8}$/;
 const CUIT_LENGTH = 11;
 
 /**
- * Reencolado manual de una factura en falla definitiva.
+ * Manual requeue of an invoice that failed permanently.
  *
- * No se encola directamente en Redis: se revive la factura y se escribe un mensaje de
- * outbox en una transacción, y el relay lo publica. Así el reencolado hereda las mismas
- * garantías que el flujo normal (sin dual-write) y repetir la llamada no duplica jobs: la
- * segunda encuentra la factura fuera de `DEAD_LETTERED` y es rechazada.
+ * It does not enqueue directly in Redis: the invoice is revived and an outbox message is
+ * written in one transaction, and the relay publishes it. The requeue thus inherits the
+ * guarantees of the normal flow (no dual write) and repeating the call does not duplicate
+ * jobs: the second call finds the invoice out of `DEAD_LETTERED` and is rejected.
  *
- * Opcionalmente corrige el dato fiscal que provocó un rechazo permanente (p. ej. un CUIT
- * inválido): reintentar sin corregirlo volvería a fallar igual.
+ * Optionally it corrects the fiscal data that caused a permanent rejection (e.g. an
+ * invalid CUIT): retrying without correcting it would fail in the same way.
  */
 export class RetryDeadLetteredInvoiceUseCase {
   constructor(
@@ -53,8 +53,8 @@ export class RetryDeadLetteredInvoiceUseCase {
 
   async execute(command: RetryDeadLetteredInvoiceCommand): Promise<RetryDeadLetteredInvoiceResult> {
     const { invoiceId } = command;
-    // La corrección se valida antes de tocar la base: un dato que el ente volvería a
-    // rechazar no debe reemplazar al anterior ni consumir un reintento.
+    // The correction is validated before touching the database: a value the authority would
+    // reject again must neither replace the previous one nor consume a retry.
     const correction = this.validateCorrection(command);
 
     const outcome = await this.invoices.requeueDeadLettered(invoiceId, correction);
@@ -66,8 +66,8 @@ export class RetryDeadLetteredInvoiceUseCase {
       throw new InvoiceNotDeadLetteredError(invoiceId, outcome.status);
     }
 
-    // Postgres es la fuente de verdad; la entrada en la DLQ es una proyección. Si este
-    // borrado fallara, el listado igualmente la descarta por no estar ya DEAD_LETTERED.
+    // Postgres is the source of truth; the DLQ entry is a projection. If this removal failed,
+    // the listing would discard the entry anyway, since it is no longer DEAD_LETTERED.
     await this.deadLetters.remove(invoiceId);
 
     return {
@@ -100,8 +100,8 @@ export class RetryDeadLetteredInvoiceUseCase {
 
     return {
       payerTaxId,
-      // El tipo de comprobante depende del identificador: se recalcula con la misma regla
-      // que en la ingesta (CUIT -> A, consumidor final -> B).
+      // The invoice type depends on the tax id: it is recomputed with the same rule as at
+      // ingestion (CUIT -> A, final consumer -> B).
       invoiceType: resolveInvoiceType(payerTaxId),
       reason,
       requestCorrelationId: command.requestCorrelationId,

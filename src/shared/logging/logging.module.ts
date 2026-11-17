@@ -5,8 +5,8 @@ import type { Env } from '../../config/env.js';
 import { assignCorrelationId } from '../http/correlation-id.js';
 
 /**
- * Logs JSON estructurados (Pino). Cada línea emitida durante un request lleva su
- * `correlationId`, propagado por AsyncLocalStorage sin pasarlo a mano entre capas.
+ * Structured JSON logs (Pino). Every line emitted during a request carries its
+ * `correlationId`, propagated by AsyncLocalStorage instead of being passed between layers.
  */
 @Module({
   imports: [
@@ -17,8 +17,8 @@ import { assignCorrelationId } from '../http/correlation-id.js';
           level: config.get('LOG_LEVEL', { infer: true }),
           genReqId: assignCorrelationId,
           customAttributeKeys: { reqId: 'correlationId' },
-          // Solo el correlationId en los logs de aplicación; el request completo se
-          // registra una vez, en la línea de "request completed".
+          // Only the correlationId in application logs; the full request is logged
+          // once, in the "request completed" line.
           quietReqLogger: true,
           redact: {
             paths: [

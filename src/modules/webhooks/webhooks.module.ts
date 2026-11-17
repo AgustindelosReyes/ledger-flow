@@ -13,7 +13,7 @@ import { WebhooksController } from './presentation/webhooks.controller.js';
     WebhookSignatureGuard,
     { provide: PaymentEventStore, useClass: PrismaPaymentEventStore },
     {
-      // El caso de uso es una clase plana, sin decoradores de framework: se arma aquí.
+      // The use case is a plain class with no framework decorators: it is wired here.
       provide: IngestPaymentWebhookUseCase,
       inject: [PaymentEventStore, ConfigService],
       useFactory: (

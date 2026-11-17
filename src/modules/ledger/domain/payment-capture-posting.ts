@@ -10,11 +10,11 @@ interface PaymentCaptureParams {
 }
 
 /**
- * Regla de imputación de un cobro aprobado:
+ * Posting rule for an approved payment:
  *
- *   DEBE   Créditos a cobrar (pasarela)   total
- *   HABER  Ingresos por ventas            neto
- *   HABER  IVA débito fiscal              impuesto
+ *   DEBIT   Gateway receivable   total
+ *   CREDIT  Sales revenue        net
+ *   CREDIT  VAT payable          tax
  */
 export function buildPaymentCaptureEntry({
   provider,
@@ -29,7 +29,7 @@ export function buildPaymentCaptureEntry({
     },
     { accountCode: AccountCode.SALES_REVENUE, direction: 'CREDIT', amount: breakdown.net },
   ];
-  // En importes mínimos el impuesto puede redondear a cero; una línea en cero no es válida.
+  // For tiny amounts the tax can round to zero; a zero-amount line is not valid.
   if (breakdown.tax.isPositive()) {
     lines.push({
       accountCode: AccountCode.VAT_PAYABLE,

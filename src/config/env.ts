@@ -3,7 +3,7 @@ import { z } from 'zod';
 const port = z.coerce.number().int().min(1).max(65535);
 const positiveInt = z.coerce.number().int().positive();
 const nonNegativeInt = z.coerce.number().int().nonnegative();
-/** Booleano explícito: `z.coerce.boolean()` trataría el string "false" como verdadero. */
+/** Explicit boolean: `z.coerce.boolean()` would treat the string "false" as true. */
 const flag = z.enum(['true', 'false']).transform((value) => value === 'true');
 
 const envSchema = z
@@ -51,8 +51,8 @@ const envSchema = z
 export type Env = z.infer<typeof envSchema>;
 
 /**
- * Valida el entorno al arrancar (fail-fast). Una variable definida pero vacía (`FOO=`) se
- * trata como ausente, para que apliquen los defaults y los opcionales.
+ * Validates the environment at startup (fail-fast). A variable that is defined but empty
+ * (`FOO=`) is treated as absent, so that defaults and optional values apply.
  */
 export function validateEnv(raw: Record<string, unknown>): Env {
   const withoutBlanks = Object.fromEntries(Object.entries(raw).filter(([, value]) => value !== ''));

@@ -1,7 +1,7 @@
 import { Decimal } from 'decimal.js';
 import type { Money } from '../../../shared/domain/money.js';
 
-/** Alícuota general de IVA. */
+/** Standard VAT rate. */
 export const STANDARD_VAT_RATE = '0.21';
 
 export interface VatBreakdown {
@@ -11,10 +11,10 @@ export interface VatBreakdown {
 }
 
 /**
- * Desglosa un importe final (IVA incluido) en neto e impuesto.
+ * Splits a gross amount (VAT included) into net and tax.
  *
- * Solo se redondea el neto; el impuesto se obtiene por diferencia. Así `net + tax = total`
- * vale siempre de forma exacta y no se pierde ni se crea un centavo por redondeo.
+ * Only the net amount is rounded; the tax is obtained by subtraction. This way
+ * `net + tax = total` always holds exactly and no cent is lost or created by rounding.
  */
 export function splitVatInclusive(total: Money, rate: string = STANDARD_VAT_RATE): VatBreakdown {
   const net = total.divide(new Decimal(rate).plus(1).toString());

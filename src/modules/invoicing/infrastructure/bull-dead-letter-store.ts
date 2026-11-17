@@ -10,9 +10,8 @@ import {
 } from '../invoice-queue.js';
 
 /**
- * DLQ como cola de BullMQ sin consumidor: los jobs permanecen en espera hasta que un
- * operador los reencola. El `jobId` es el `invoiceId`, por lo que hay a lo sumo una entrada
- * por factura.
+ * DLQ as a BullMQ queue with no consumer: jobs stay waiting until an operator requeues
+ * them. The `jobId` is the `invoiceId`, so there is at most one entry per invoice.
  */
 @Injectable()
 export class BullDeadLetterStore extends DeadLetterStore {
@@ -23,7 +22,7 @@ export class BullDeadLetterStore extends DeadLetterStore {
   }
 
   async put(entry: DeadLetterEntry): Promise<void> {
-    // Una entrada vieja con el mismo id haría que `add` se ignore y quede el motivo anterior.
+    // A stale entry with the same id would make `add` a no-op and keep the previous reason.
     await this.queue.remove(entry.invoiceId);
     await this.queue.add(DEAD_LETTER_JOB, entry, { jobId: entry.invoiceId });
   }

@@ -14,7 +14,7 @@ export interface WebhookEventRecord {
   readonly correlationId: string;
 }
 
-/** Efectos contables y fiscales de un pago aprobado, ya validados por el dominio. */
+/** Accounting and fiscal effects of an approved payment, already validated by the domain. */
 export interface ApprovedPaymentRecord {
   readonly externalPaymentId: string;
   readonly amount: Money;
@@ -39,20 +39,20 @@ export interface RecordedOperation {
 export type RecordOutcome =
   | { readonly kind: 'recorded'; readonly operation: RecordedOperation }
   | {
-      /** El evento ya existía; se devuelve lo registrado originalmente, sin escribir nada. */
+      /** The event already existed; what was originally recorded is returned, nothing written. */
       readonly kind: 'duplicate';
       readonly operation: RecordedOperation;
       readonly storedPayloadHash: string;
     };
 
 /**
- * Puerto de persistencia de la ingesta. Contrato:
+ * Persistence port of the ingestion. Contract:
  *
- *  - Atomicidad: evento, pago, asiento, factura pendiente y mensaje de outbox se confirman
- *    juntos o no se confirma ninguno.
- *  - Idempotencia: ante N llamadas concurrentes con el mismo `(provider, eventId)`,
- *    exactamente una obtiene `recorded`; el resto obtiene `duplicate`.
- *  - Lanza `PaymentAlreadyRecordedError` si otro evento ya registró el mismo pago.
+ *  - Atomicity: event, payment, journal entry, pending invoice and outbox message are
+ *    committed together, or none of them is.
+ *  - Idempotency: given N concurrent calls with the same `(provider, eventId)`, exactly
+ *    one gets `recorded`; the rest get `duplicate`.
+ *  - Throws `PaymentAlreadyRecordedError` if another event already recorded the payment.
  */
 export abstract class PaymentEventStore {
   abstract record(

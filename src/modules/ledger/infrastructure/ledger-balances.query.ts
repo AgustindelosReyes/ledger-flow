@@ -13,8 +13,8 @@ export interface AccountBalance {
 }
 
 /**
- * Los saldos no se almacenan: se derivan sumando asientos inmutables. La agregación corre
- * en PostgreSQL sobre NUMERIC y viaja como texto, sin pasar por `number` de JavaScript.
+ * Balances are not stored: they are derived by summing immutable entries. The aggregation
+ * runs in PostgreSQL over NUMERIC and travels as text, never as a JavaScript `number`.
  */
 @Injectable()
 export class LedgerBalancesQuery {

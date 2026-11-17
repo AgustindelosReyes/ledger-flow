@@ -15,8 +15,8 @@ export class DeadLetterQuery {
   ) {}
 
   /**
-   * Entradas de la DLQ cruzadas contra Postgres, que es la fuente de verdad: solo se
-   * muestran las facturas que siguen en `DEAD_LETTERED`.
+   * DLQ entries cross-checked against Postgres, which is the source of truth: only the
+   * invoices that are still `DEAD_LETTERED` are shown.
    */
   async list(limit: number): Promise<DeadLetterView[]> {
     const entries = await this.deadLetters.list(limit);

@@ -41,7 +41,7 @@ import { DeadLetterController } from './presentation/dead-letter.controller.js';
         new RandomFaultInjector(config.get('FISCAL_SIMULATOR_FAILURE_RATE', { infer: true })),
     },
     {
-      // Único punto a cambiar para integrar el web service real del ente fiscal.
+      // The only place to change in order to integrate the real fiscal web service.
       provide: FiscalAuthority,
       inject: [AuthorizationRegistry, FaultInjector, ConfigService],
       useFactory: (

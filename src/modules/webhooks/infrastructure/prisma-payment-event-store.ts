@@ -37,10 +37,10 @@ export class PrismaPaymentEventStore extends PaymentEventStore {
     event: WebhookEventRecord,
     payment: ApprovedPaymentRecord | null,
   ): Promise<RecordOutcome> {
-    // Punto de serialización de la idempotencia: `INSERT ... ON CONFLICT DO NOTHING` sobre
-    // UNIQUE(provider, event_id). Si otra transacción ya insertó la misma clave y aún no
-    // confirmó, este INSERT se bloquea hasta que termine: si confirma, aquí no se inserta
-    // nada (duplicado); si aborta, este INSERT gana. No hay ventana check-then-act.
+    // Serialization point of the idempotency: `INSERT ... ON CONFLICT DO NOTHING` on
+    // UNIQUE(provider, event_id). If another transaction has inserted the same key and not
+    // yet committed, this INSERT blocks until it finishes: if it commits, nothing is inserted
+    // here (duplicate); if it aborts, this INSERT wins. There is no check-then-act window.
     const [insertedEvent] = await tx.webhookEvent.createManyAndReturn({
       data: [
         {
@@ -128,8 +128,8 @@ export class PrismaPaymentEventStore extends PaymentEventStore {
       select: { id: true },
     });
 
-    // Outbox: la intención de encolar el job fiscal se confirma junto con el pago. El relay
-    // la publica después en BullMQ.
+    // Outbox: the intention to enqueue the fiscal job is committed together with the payment.
+    // The relay publishes it to BullMQ afterwards.
     await tx.outboxEvent.create({
       data: {
         type: INVOICE_REQUESTED_EVENT,
@@ -201,9 +201,9 @@ export class PrismaPaymentEventStore extends PaymentEventStore {
   }
 
   /**
-   * Tras una violación de unicidad, la transacción ya hizo rollback. El evento no pudo
-   * causarla (usa ON CONFLICT), así que se verifica si fue UNIQUE(provider,
-   * external_payment_id): otro evento registró antes el mismo pago.
+   * After a unique violation the transaction has already rolled back. The event cannot have
+   * caused it (it uses ON CONFLICT), so this checks whether it was UNIQUE(provider,
+   * external_payment_id): another event recorded the same payment first.
    */
   private async isPaymentConflict(
     error: unknown,

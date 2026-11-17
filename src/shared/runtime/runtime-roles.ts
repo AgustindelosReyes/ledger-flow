@@ -3,8 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env.js';
 
 /**
- * Procesos en segundo plano que esta instancia ejecuta. La misma imagen puede desplegarse
- * como API pura, como worker, o como ambos, y escalarse por separado.
+ * Background processes that this instance runs. The same image can be deployed as a pure
+ * API, as a worker, or as both, and scaled separately.
  */
 export abstract class RuntimeRoles {
   abstract readonly outboxRelay: boolean;

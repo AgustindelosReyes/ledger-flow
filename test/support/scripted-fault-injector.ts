@@ -5,19 +5,20 @@ import {
 } from '../../src/modules/invoicing/infrastructure/fiscal-simulator/fault-injector.js';
 
 /**
- * Inyector determinista: cada test fija, para un importe único, la secuencia de fallas que
- * sufrirán las solicitudes de esa factura. Agotado el guion, el ente responde bien.
+ * Deterministic injector: each test sets, for a unique amount, the sequence of faults
+ * that the requests of that invoice will suffer. Once the script is exhausted, the
+ * authority responds fine.
  */
 export class ScriptedFaultInjector extends FaultInjector {
   private readonly scripts = new Map<string, SimulatedFault[]>();
   private readonly calls = new Map<string, number>();
 
-  /** Guion para la factura cuyo total es `totalAmount`. */
+  /** Script for the invoice whose total is `totalAmount`. */
   script(totalAmount: string, faults: readonly SimulatedFault[]): void {
     this.scripts.set(totalAmount, [...faults]);
   }
 
-  /** Cantidad de solicitudes que el ente recibió para una factura. */
+  /** Number of requests the authority received for an invoice. */
   callsFor(invoiceId: string): number {
     return this.calls.get(invoiceId) ?? 0;
   }

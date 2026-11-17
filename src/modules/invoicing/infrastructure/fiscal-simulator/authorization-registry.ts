@@ -16,9 +16,10 @@ export interface AuthorizationProposal {
 }
 
 /**
- * Estado propio del ente fiscal simulado: numeración correlativa por (punto de venta, tipo)
- * y registro de lo ya autorizado. `authorize` es idempotente por `invoiceId`: una segunda
- * llamada devuelve la autorización original en lugar de emitir otro comprobante.
+ * State owned by the simulated fiscal authority: consecutive numbering per (point of
+ * sale, type) and a record of what was already authorized. `authorize` is idempotent by
+ * `invoiceId`: a second call returns the original authorization instead of issuing
+ * another invoice.
  */
 export abstract class AuthorizationRegistry {
   abstract authorize(proposal: AuthorizationProposal): Promise<FiscalAuthorization>;
@@ -30,7 +31,7 @@ const authorizationSchema = z.object({
   caeExpiresAt: z.iso.date(),
 });
 
-// Atómico en Redis: buscar la autorización previa, o numerar y registrar una nueva.
+// Atomic in Redis: look up the previous authorization, or number and store a new one.
 const AUTHORIZE_SCRIPT = `
 local existing = redis.call('GET', KEYS[1])
 if existing then

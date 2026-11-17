@@ -27,8 +27,9 @@ interface PendingOutboxEvent {
 }
 
 /**
- * El evento no puede publicarse por más que se reintente: su tipo no tiene publicador o su
- * payload no cumple el contrato. A diferencia de una caída de Redis, no es transitorio.
+ * The event cannot be published no matter how many times it is retried: its type has no
+ * publisher or its payload breaks the contract. Unlike a Redis outage, it is not
+ * transient.
  */
 export class UnpublishableOutboxEventError extends Error {
   constructor(message: string) {
@@ -43,14 +44,15 @@ const COMPLETED_JOB_RETENTION_SECONDS = 24 * 3600;
 const FAILED_JOB_RETENTION_SECONDS = 7 * 24 * 3600;
 
 /**
- * Publica en BullMQ los mensajes escritos en `outbox_events` (Transactional Outbox).
+ * Publishes to BullMQ the messages written to `outbox_events` (Transactional Outbox).
  *
- * Garantía: entrega at-least-once hacia la cola, con duplicados neutralizados.
+ * Guarantee: at-least-once delivery to the queue, with duplicates neutralized.
  *
- *  - `FOR UPDATE SKIP LOCKED`: varias instancias del relay se reparten los eventos sin
- *    bloquearse ni publicar el mismo dos veces.
- *  - `jobId = outboxEvent.id`: si el proceso muere entre `queue.add()` y el UPDATE, el
- *    evento sigue PENDING y se republica, pero BullMQ ignora un `add` con un id existente.
+ *  - `FOR UPDATE SKIP LOCKED`: several relay instances share the events without blocking
+ *    each other or publishing the same one twice.
+ *  - `jobId = outboxEvent.id`: if the process dies between `queue.add()` and the UPDATE,
+ *    the event stays PENDING and is republished, but BullMQ ignores an `add` whose id
+ *    already exists.
  */
 @Injectable()
 export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
@@ -84,7 +86,7 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
     }
   }
 
-  /** Detiene el sondeo y espera la iteración en curso, antes de que se cierren las conexiones. */
+  /** Stops polling and waits for the iteration in progress, before connections close. */
   async onModuleDestroy(): Promise<void> {
     this.stopped = true;
     clearTimeout(this.timer);
@@ -92,8 +94,8 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /**
-   * Publica un lote de eventos pendientes y devuelve cuántos publicó. Es seguro invocarlo
-   * en paralelo, desde este u otros procesos.
+   * Publishes a batch of pending events and returns how many it published. It is safe to
+   * call in parallel, from this process or from others.
    */
   async publishPending(): Promise<number> {
     return this.prisma.$transaction(
@@ -120,9 +122,9 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
             this.logger.log({ ...log, type: event.type }, 'Outbox event published to the queue');
           } catch (error) {
             const attempts = event.attempts + 1;
-            // Protección contra poison pills: un evento impublicable no puede quedar en un
-            // bucle infinito ni tapar el lote. Solo este tipo de error agota intentos; una
-            // falla de infraestructura deja el evento PENDING para no perder mensajes válidos.
+            // Poison-pill protection: an unpublishable event must not stay in an infinite
+            // loop or clog the batch. Only this kind of error exhausts attempts; an
+            // infrastructure failure leaves the event PENDING so valid messages are not lost.
             const failed =
               error instanceof UnpublishableOutboxEventError && attempts >= this.maxAttempts;
             const message = error instanceof Error ? error.message : 'Unknown error';
@@ -169,8 +171,8 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
       {
         jobId: event.id,
         attempts: this.jobAttempts,
-        // Espera antes del reintento n: base * 2^(n-1). El jitter evita que los reintentos
-        // de muchos jobs que fallaron juntos vuelvan a golpear al ente al mismo tiempo.
+        // Delay before retry n: base * 2^(n-1). Jitter keeps the retries of many jobs
+        // that failed together from hitting the authority again at the same time.
         backoff: { type: 'exponential', delay: this.jobBackoffMs, jitter: 0.2 },
         removeOnComplete: { age: COMPLETED_JOB_RETENTION_SECONDS },
         removeOnFail: { age: FAILED_JOB_RETENTION_SECONDS },
@@ -194,7 +196,7 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
     } catch (error) {
       this.logger.error({ err: error }, 'Outbox relay iteration failed');
     }
-    // Con un lote lleno probablemente hay más pendientes: se continúa sin esperar.
+    // A full batch probably means more are pending: continue without waiting.
     this.schedule(published >= this.batchSize ? 0 : this.pollIntervalMs);
   }
 }

@@ -12,8 +12,8 @@ import { InvalidWebhookSignatureError } from '../application/errors.js';
 import { SIGNATURE_HEADER, verifyWebhookSignature } from '../domain/webhook-signature.js';
 
 /**
- * Autentica el webhook antes de validar o procesar el cuerpo. La firma se calcula sobre
- * `req.rawBody` (los bytes recibidos), no sobre el objeto ya parseado.
+ * Authenticates the webhook before the body is validated or processed. The signature is
+ * computed over `req.rawBody` (the bytes received), not over the parsed object.
  */
 @Injectable()
 export class WebhookSignatureGuard implements CanActivate {
@@ -31,7 +31,7 @@ export class WebhookSignatureGuard implements CanActivate {
 
     const verification = verifyWebhookSignature({
       header: request.header(SIGNATURE_HEADER),
-      // Sin cuerpo crudo (p. ej. content-type no JSON) la firma no puede coincidir.
+      // Without a raw body (e.g. a non-JSON content type) the signature cannot match.
       rawBody: request.rawBody ?? Buffer.alloc(0),
       secret: this.secret,
       toleranceSeconds: this.toleranceSeconds,
@@ -39,7 +39,7 @@ export class WebhookSignatureGuard implements CanActivate {
     });
 
     if (!verification.valid) {
-      // El motivo queda en logs para operaciones; al emisor se le responde un 401 genérico.
+      // The reason is logged for operations; the sender only gets a generic 401.
       this.logger.warn({ reason: verification.reason }, 'Webhook signature rejected');
       throw new InvalidWebhookSignatureError(verification.reason);
     }

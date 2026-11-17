@@ -17,7 +17,7 @@ import { ScriptedFaultInjector } from './support/scripted-fault-injector.js';
 import { buildPaymentEvent, createTestApp, type TestApp } from './support/test-app.js';
 import { waitFor } from './support/wait-for.js';
 
-/** CUIT con dígito verificador incorrecto: el ente fiscal lo rechaza con 400. */
+/** CUIT with a wrong check digit: the fiscal authority rejects it with a 400. */
 const INVALID_CUIT = '30712345678';
 const VALID_CUIT = '30712345671';
 
@@ -36,7 +36,7 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
     await t.close();
   });
 
-  /** Cada test usa un importe propio: es la clave de su guion de fallas. */
+  /** Each test uses its own amount: it is the key of its fault script. */
   async function pay(
     amount: string,
     payer?: { name?: string; taxId?: string },
@@ -61,7 +61,7 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
     return traceOf(response);
   }
 
-  /** Espera a que la factura llegue a un estado terminal y devuelve la traza. */
+  /** Waits for the invoice to reach a terminal state and returns the trace. */
   function waitForInvoice(
     paymentId: string,
     status: 'ISSUED' | 'DEAD_LETTERED',
@@ -125,7 +125,7 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
         response: { cae: trace.invoice?.cae, number: trace.invoice?.number },
       });
 
-      // El job lleva como id el del mensaje de outbox y quedó completado.
+      // The job id is the id of the outbox message, and the job ended up completed.
       expect(trace.queue.deadLetter).toBeNull();
       expect(trace.queue.jobs).toHaveLength(1);
       const [job] = trace.queue.jobs;
@@ -191,9 +191,9 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
         { n: 2, outcome: 'RETRYABLE_FAILURE', code: 'TIMEOUT', http: null },
         { n: 3, outcome: 'SUCCEEDED', code: null, http: 200 },
       ]);
-      // El intento con timeout esperó, como mínimo, el plazo configurado (250 ms).
+      // The attempt that timed out waited at least the configured timeout (250 ms).
       expect(trace.invoice?.attempts[1]?.durationMs).toBeGreaterThanOrEqual(240);
-      // Los tres intentos pertenecen al mismo job: fueron reintentos de BullMQ.
+      // All three attempts belong to the same job: they were BullMQ retries.
       expect(new Set(trace.invoice?.attempts.map((attempt) => attempt.jobId)).size).toBe(1);
       expect(trace.queue.deadLetter).toBeNull();
     });
@@ -208,8 +208,8 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
         'RETRYABLE_FAILURE',
         'SUCCEEDED',
       ]);
-      // El ente recibió dos solicitudes, pero numeró una sola vez: el reintento obtuvo la
-      // autorización original. Lo confirma un pago posterior, que recibe el número siguiente.
+      // The authority received two requests but numbered only once: the retry got the
+      // original authorization. A later payment confirms it by receiving the next number.
       expect(faults.callsFor(ack.invoiceId)).toBe(2);
       const next = await waitForInvoice((await pay('3641.00')).paymentId, 'ISSUED');
       expect(next.invoice?.number).toBe((trace.invoice?.number ?? 0) + 1);
@@ -224,7 +224,7 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
 
       const failed = await waitForInvoice(ack.paymentId, 'DEAD_LETTERED');
 
-      // Exactamente INVOICE_JOB_ATTEMPTS (3) intentos, ni uno más.
+      // Exactly INVOICE_JOB_ATTEMPTS (3) attempts, not one more.
       expect(failed.invoice?.attemptCount).toBe(3);
       expect(failed.invoice?.attempts.map((attempt) => attempt.outcome)).toEqual([
         'RETRYABLE_FAILURE',
@@ -246,7 +246,7 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
         attemptCount: 3,
       });
 
-      // Reencolado manual: el guion se agotó, así que ahora el ente responde bien.
+      // Manual requeue: the script is exhausted, so the authority now responds fine.
       const retried = retryAcceptedOf(await retry(ack.invoiceId).expect(202));
       expect(retried).toMatchObject({ invoiceId: ack.invoiceId, correlationId });
 
@@ -257,7 +257,7 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
         outcome: 'SUCCEEDED',
         jobId: retried.outboxEventId,
       });
-      // Dos jobs en la historia: el original (fallido) y el del reencolado.
+      // Two jobs in the history: the original one (failed) and the requeued one.
       expect(issued.queue.jobs.map((job) => job.outboxEventId)).toEqual([
         failed.queue.jobs[0]?.outboxEventId,
         retried.outboxEventId,
@@ -265,7 +265,7 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
       expect(issued.queue.deadLetter).toBeNull();
       expect((await listDeadLetters()).map((item) => item.invoiceId)).not.toContain(ack.invoiceId);
 
-      // Idempotencia del reencolado: repetirlo no crea otro job.
+      // Idempotent requeue: repeating it does not create another job.
       const again = await retry(ack.invoiceId).expect(409);
       expect(problemOf(again).type).toBe('/problems/invoice-not-dead-lettered');
       expect(await t.prisma.outboxEvent.count({ where: { aggregateId: ack.invoiceId } })).toBe(2);
@@ -303,7 +303,7 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
       expect(trace.queue.deadLetter).toMatchObject({ errorCode: 'HTTP_400' });
       expect(faults.callsFor(ack.invoiceId)).toBe(1);
 
-      // BullMQ lo dio por fallido en el primer intento, pese a tener 3 disponibles.
+      // BullMQ gave it up on the first attempt, despite having 3 available.
       const job = await waitFor('job to be failed', async () => {
         const [state] = (await getTrace(ack.paymentId)).queue.jobs;
         return state?.jobState === 'failed' ? state : null;
@@ -313,7 +313,7 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
   });
 
   describe('dead letter retry with corrected fiscal data', () => {
-    /** Pago cuya factura A cae en la DLQ porque el ente rechaza el CUIT (400). */
+    /** Payment whose type A invoice lands in the DLQ because the CUIT is rejected (400). */
     async function deadLetterByInvalidCuit(amount: string): Promise<AcceptedAck> {
       const ack = await pay(amount, { name: 'ACME SA', taxId: INVALID_CUIT });
       await waitForInvoice(ack.paymentId, 'DEAD_LETTERED');
@@ -347,7 +347,7 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
         'SUCCEEDED',
       ]);
 
-      // Auditoría: qué cambió, por qué y qué request administrativo lo hizo.
+      // Audit: what changed, why, and which admin request did it.
       expect(trace.invoice?.corrections).toHaveLength(1);
       expect(trace.invoice?.corrections[0]).toMatchObject({
         field: 'payerTaxId',
@@ -357,7 +357,7 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
         correlationId: adminCorrelationId,
       });
 
-      // El pago refleja el dato corregido; el payload original del webhook no se altera.
+      // The payment reflects the corrected value; the original webhook payload is untouched.
       const payment = await t.prisma.payment.findUniqueOrThrow({
         where: { id: ack.paymentId },
         include: { webhookEvent: true },
@@ -392,7 +392,7 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
       expect(await correctionsOf(ack.invoiceId)).toBe(0);
       const payment = await t.prisma.payment.findUniqueOrThrow({ where: { id: ack.paymentId } });
       expect(payment.payerTaxId).toBe(INVALID_CUIT);
-      // Sigue en la DLQ, disponible para un nuevo intento de corrección.
+      // Still in the DLQ, available for a new correction attempt.
       expect((await listDeadLetters()).map((item) => item.invoiceId)).toContain(ack.invoiceId);
     });
 
@@ -460,7 +460,7 @@ describe('Asynchronous fiscal invoicing (e2e)', () => {
       const issued = await waitForInvoice(ack.paymentId, 'ISSUED');
       expect(faults.callsFor(ack.invoiceId)).toBe(1);
 
-      // Un job duplicado para la misma factura (p. ej. una republicación del relay).
+      // A duplicate job for the same invoice (e.g. a republication by the relay).
       const duplicate = await queue.add(
         ISSUE_INVOICE_JOB,
         { invoiceId: ack.invoiceId, paymentId: ack.paymentId, correlationId: 'duplicate-job' },

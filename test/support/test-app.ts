@@ -31,7 +31,7 @@ export interface PaymentEventBody {
 }
 
 interface SendOptions {
-  /** Firma a enviar. Por defecto, una firma válida sobre los bytes exactos del cuerpo. */
+  /** Signature to send. By default, a valid signature over the exact bytes of the body. */
   readonly signature?: string | null;
   readonly timestampSeconds?: number;
   readonly correlationId?: string;
@@ -39,11 +39,11 @@ interface SendOptions {
 
 export interface TestAppOptions {
   /**
-   * Ejecuta el relay del outbox y el worker fiscal. Apagado por defecto: los tests de
-   * ingesta observan el estado exacto que deja la transacción del webhook.
+   * Runs the outbox relay and the fiscal worker. Off by default: the ingestion tests
+   * observe the exact state left by the webhook transaction.
    */
   readonly background?: boolean;
-  /** Guion de fallas del ente fiscal simulado. */
+  /** Fault script for the simulated fiscal authority. */
   readonly faults?: FaultInjector;
 }
 
@@ -52,11 +52,11 @@ export interface TestApp {
   readonly prisma: PrismaService;
   readonly adminHeaders: Record<string, string>;
   sign(rawBody: string, timestampSeconds?: number): string;
-  /** Envía `rawBody` tal cual, byte a byte, a `POST /webhooks/payments`. */
+  /** Sends `rawBody` as is, byte for byte, to `POST /webhooks/payments`. */
   sendWebhook(rawBody: string, options?: SendOptions): request.Test;
   /**
-   * Da por publicados los mensajes de outbox que dejaron otros archivos de test, para que
-   * este solo vea los propios.
+   * Marks as published the outbox messages left by other test files, so that this one
+   * only sees its own.
    */
   discardPendingOutbox(): Promise<void>;
   close(): Promise<void>;
@@ -64,7 +64,7 @@ export interface TestApp {
 
 const nowSeconds = (): number => Math.floor(Date.now() / 1000);
 
-/** Evento de pago aprobado con identificadores únicos: los tests no comparten estado. */
+/** Approved payment event with unique identifiers: tests share no state. */
 export function buildPaymentEvent(overrides: Partial<PaymentEventBody> = {}): PaymentEventBody {
   return {
     eventId: `evt_${randomUUID()}`,
@@ -92,7 +92,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<INestApplication<App>>(APP_OPTIONS);
   app.useLogger(app.get(Logger));
-  // Puerto real: las peticiones concurrentes deben llegar por sockets independientes.
+  // Real port: concurrent requests must arrive through independent sockets.
   await app.listen(0);
 
   const config = app.get<ConfigService<Env, true>>(ConfigService);

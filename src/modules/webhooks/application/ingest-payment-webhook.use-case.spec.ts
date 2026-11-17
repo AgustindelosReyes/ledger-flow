@@ -15,7 +15,7 @@ import {
   type WebhookEventRecord,
 } from './ports/payment-event-store.js';
 
-/** Doble en memoria que cumple el contrato de idempotencia del puerto. */
+/** In-memory double that honours the idempotency contract of the port. */
 class InMemoryPaymentEventStore extends PaymentEventStore {
   readonly calls: { event: WebhookEventRecord; payment: ApprovedPaymentRecord | null }[] = [];
   private readonly stored = new Map<string, { hash: string; operation: RecordedOperation }>();

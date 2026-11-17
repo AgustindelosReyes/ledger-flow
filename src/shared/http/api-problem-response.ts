@@ -3,8 +3,8 @@ import { ApiExtraModels, ApiResponse, getSchemaPath } from '@nestjs/swagger';
 import { PROBLEM_CONTENT_TYPE, ProblemDetails } from './problem-details.js';
 
 /**
- * Documenta una respuesta de error con su media type real, `application/problem+json`
- * (los decoradores `Api*Response({ type })` la declararían como `application/json`).
+ * Documents an error response with its real media type, `application/problem+json`
+ * (the `Api*Response({ type })` decorators would declare it as `application/json`).
  */
 export function ApiProblemResponse(
   status: number,

@@ -4,12 +4,15 @@ import { createParamDecorator, type ExecutionContext } from '@nestjs/common';
 
 export const CORRELATION_ID_HEADER = 'x-correlation-id';
 
-/** Se acepta el id del cliente solo si es un token inocuo: va a parar a logs y a la base. */
+/**
+ * The client id is accepted only if it is a harmless token: it ends up in logs and in
+ * the database.
+ */
 const SAFE_CORRELATION_ID = /^[A-Za-z0-9._-]{8,64}$/;
 
 /**
- * `genReqId` de pino-http: reutiliza el `x-correlation-id` entrante o genera uno, y lo
- * devuelve en la respuesta. Al ser el id del request, pino lo incluye en cada línea de log.
+ * `genReqId` for pino-http: reuses the incoming `x-correlation-id` or generates one, and
+ * returns it in the response. As the request id, pino includes it in every log line.
  */
 export function assignCorrelationId(req: IncomingMessage, res: ServerResponse): string {
   const incoming = req.headers[CORRELATION_ID_HEADER];
@@ -23,7 +26,7 @@ export function correlationIdOf(req: IncomingMessage): string | undefined {
   return typeof req.id === 'string' ? req.id : undefined;
 }
 
-/** Inyecta el correlationId del request en un handler. */
+/** Injects the correlationId of the request into a handler. */
 export const CorrelationId = createParamDecorator((_data: unknown, context: ExecutionContext) => {
   const correlationId = correlationIdOf(context.switchToHttp().getRequest<IncomingMessage>());
   if (correlationId === undefined) {

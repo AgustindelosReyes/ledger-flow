@@ -1,7 +1,10 @@
 import type { InvoiceType } from '../../domain/invoice-type.js';
 
 export interface FiscalAuthorizationRequest {
-  /** Clave de idempotencia ante el ente: reintentar con el mismo id no emite otro comprobante. */
+  /**
+   * Idempotency key for the authority: retrying with the same id does not issue another
+   * invoice.
+   */
   readonly invoiceId: string;
   readonly type: InvoiceType;
   readonly pointOfSale: number;
@@ -13,23 +16,23 @@ export interface FiscalAuthorizationRequest {
 }
 
 export interface FiscalAuthorization {
-  /** Número correlativo asignado por el ente para (punto de venta, tipo). */
+  /** Consecutive number assigned by the authority for (point of sale, type). */
   readonly number: number;
-  /** Código de Autorización Electrónico: 14 dígitos. */
+  /** Electronic authorization code (CAE): 14 digits. */
   readonly cae: string;
-  /** Vencimiento del CAE, `YYYY-MM-DD`. */
+  /** CAE expiry date, `YYYY-MM-DD`. */
   readonly caeExpiresAt: string;
 }
 
 /**
- * Falla al tramitar ante el ente fiscal. `retryable` es la clasificación que gobierna la
- * resiliencia: un error transitorio se reintenta con backoff; uno permanente va directo a
- * la DLQ, porque repetir la misma solicitud daría el mismo rechazo.
+ * Failure while dealing with the fiscal authority. `retryable` is the classification that
+ * drives resilience: a transient error is retried with backoff; a permanent one goes
+ * straight to the DLQ, because repeating the same request would get the same rejection.
  */
 export abstract class FiscalAuthorityError extends Error {
   abstract readonly code: string;
   abstract readonly retryable: boolean;
-  /** Código HTTP de la respuesta; `null` si no hubo respuesta. */
+  /** HTTP status of the response; `null` if there was no response. */
   abstract readonly httpStatus: number | null;
 
   constructor(message: string) {
@@ -68,11 +71,11 @@ export class FiscalRejectionError extends FiscalAuthorityError {
   }
 }
 
-/** Puerto de salida hacia el ente fiscal (ARCA/AFIP). */
+/** Outbound port to the fiscal authority (ARCA/AFIP). */
 export abstract class FiscalAuthority {
   /**
-   * @param signal se aborta cuando vence el timeout del cliente; la implementación debe
-   *   dejar de esperar y liberar recursos.
+   * @param signal aborted when the client timeout expires; the implementation must stop
+   *   waiting and release its resources.
    */
   abstract authorize(
     request: FiscalAuthorizationRequest,

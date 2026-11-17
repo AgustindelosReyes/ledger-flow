@@ -14,8 +14,8 @@ export default {
   transform: {
     '^.+\\.ts$': ['ts-jest', { useESM: true, tsconfig: '<rootDir>/tsconfig.json' }],
   },
-  // Los tests comparten PostgreSQL y Redis de test: en serie, para que el worker de un
-  // archivo no consuma los jobs de otro.
+  // The tests share the test PostgreSQL and Redis: they run serially so that the worker of
+  // one file does not consume the jobs of another.
   maxWorkers: 1,
   testTimeout: 30000,
 };

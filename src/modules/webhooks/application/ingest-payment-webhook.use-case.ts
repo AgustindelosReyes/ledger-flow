@@ -35,18 +35,21 @@ export interface PaymentEvent {
 }
 
 export interface IngestPaymentWebhookCommand {
-  /** Bytes exactos del request: de aquí salen el hash de idempotencia y el payload auditado. */
+  /**
+   * Exact bytes of the request: the idempotency hash and the audited payload come from
+   * here.
+   */
   readonly rawBody: Buffer;
   readonly correlationId: string;
   readonly event: PaymentEvent;
 }
 
 export type IngestStatus =
-  /** Primera recepción: pago contabilizado y factura solicitada. */
+  /** First delivery: payment booked and invoice requested. */
   | 'accepted'
-  /** Reentrega de un evento ya registrado: sin efectos. */
+  /** Redelivery of an event that was already recorded: no effects. */
   | 'duplicate'
-  /** Evento válido sin efecto contable; se registra solo para auditoría. */
+  /** Valid event with no accounting effect; recorded for audit only. */
   | 'ignored';
 
 export interface IngestPaymentWebhookResult extends RecordedOperation {
@@ -68,8 +71,8 @@ export class IngestPaymentWebhookUseCase {
     const { event, rawBody, correlationId } = command;
     const payloadHash = createHash('sha256').update(rawBody).digest('hex');
 
-    // Todas las reglas de negocio se evalúan antes de abrir la transacción: el dominio
-    // rechaza importes o asientos inválidos sin haber tocado la base.
+    // Every business rule is evaluated before the transaction is opened: the domain rejects
+    // invalid amounts or journal entries without having touched the database.
     const payment = event.type === 'payment.approved' ? this.buildApprovedPayment(event) : null;
 
     const outcome = await this.store.record(

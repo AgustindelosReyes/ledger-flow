@@ -1,5 +1,5 @@
--- Vacía la base de TEST entre corridas. Los triggers de inmutabilidad se suspenden solo
--- para esta sesión; el plan de cuentas (datos de referencia) se conserva.
+-- Empties the TEST database between runs. The immutability triggers are suspended for
+-- this session only; the chart of accounts (reference data) is preserved.
 SET session_replication_role = replica;
 TRUNCATE TABLE
   "invoice_corrections",

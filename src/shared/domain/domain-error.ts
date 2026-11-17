@@ -1,6 +1,6 @@
 /**
- * Error de regla de negocio. `code` es estable y es lo que la capa HTTP usa para
- * traducirlo a un Problem Detail; el dominio no conoce códigos de estado.
+ * Business rule error. `code` is stable and is what the HTTP layer uses to translate it
+ * into a Problem Detail; the domain knows nothing about status codes.
  */
 export abstract class DomainError extends Error {
   abstract readonly code: string;

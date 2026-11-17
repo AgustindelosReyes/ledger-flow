@@ -16,8 +16,8 @@ export class OperationNotFoundError extends DomainError {
 }
 
 /**
- * Reconstruye la traza completa de una operación combinando sus dos fuentes: PostgreSQL
- * (evento, pago, asientos, factura, intentos, outbox) y Redis (estado vivo de los jobs).
+ * Rebuilds the full trace of an operation by combining its two sources: PostgreSQL
+ * (event, payment, journal entries, invoice, attempts, outbox) and Redis (live job state).
  */
 @Injectable()
 export class OperationTraceQuery {
@@ -134,7 +134,7 @@ export class OperationTraceQuery {
 
     const jobs = await Promise.all(
       outboxEvents.map(async (event): Promise<TraceQueueJobDto> => {
-        // El relay publica cada mensaje de outbox con `jobId = outboxEvent.id`.
+        // The relay publishes every outbox message with `jobId = outboxEvent.id`.
         const job = await this.queue.getJob(event.id);
         return {
           outboxEventId: event.id,

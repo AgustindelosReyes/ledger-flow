@@ -65,7 +65,7 @@ describe('Money', () => {
       ['121.00', '1.21', '100.00'],
       ['100.00', '3', '33.33'],
       ['200.00', '3', '66.67'],
-      // Empates exactos: half-even redondea al dígito par más cercano.
+      // Exact ties: half-even rounds to the nearest even digit.
       ['0.05', '2', '0.02'],
       ['0.15', '2', '0.08'],
       ['0.25', '2', '0.12'],

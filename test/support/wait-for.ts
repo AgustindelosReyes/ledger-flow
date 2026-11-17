@@ -1,8 +1,8 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 
 /**
- * Espera a que un proceso asíncrono (relay, worker) alcance un estado. Devuelve el primer
- * valor no nulo que produzca `probe`; falla con un mensaje descriptivo si vence el plazo.
+ * Waits for an asynchronous process (relay, worker) to reach a state. Returns the first
+ * non-null value produced by `probe`; fails with a descriptive message on timeout.
  */
 export async function waitFor<T>(
   description: string,

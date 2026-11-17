@@ -45,13 +45,13 @@ interface LoggedAttempt extends AttemptRecord {
   readonly outcome: 'SUCCEEDED' | 'RETRYABLE_FAILURE' | 'PERMANENT_FAILURE';
 }
 
-/** Repositorio en memoria con el mismo bloqueo optimista que la implementación real. */
+/** In-memory repository with the same optimistic locking as the real implementation. */
 class InMemoryInvoiceRepository extends InvoiceIssuanceRepository {
   readonly attempts: LoggedAttempt[] = [];
   issued: FiscalAuthorization | undefined;
-  /** Simula a otro proceso modificando la factura justo después de la lectura. */
+  /** Simulates another process modifying the invoice right after it is read. */
   interfereAfterFind = false;
-  /** Simula a otro proceso modificando la factura mientras se espera al ente fiscal. */
+  /** Simulates another process modifying the invoice while waiting for the authority. */
   interfereAfterClaim = false;
 
   constructor(private invoice: InvoiceSnapshot | null) {
@@ -157,9 +157,9 @@ const failWith =
   (error: Error): Behaviour =>
   () =>
     Promise.reject(error);
-/** Ente que nunca responde y que, además, ignora la señal de aborto. */
+/** Authority that never responds and, on top of that, ignores the abort signal. */
 const neverRespond: Behaviour = () => new Promise<FiscalAuthorization>(() => undefined);
-/** Ente que aborta al recibir la señal, con un error propio del transporte. */
+/** Authority that aborts when signalled, with a transport-specific error. */
 const abortOnSignal: Behaviour = (signal) =>
   new Promise<FiscalAuthorization>((_resolve, reject) => {
     signal.addEventListener('abort', () => {
@@ -376,7 +376,7 @@ describe('IssueInvoiceUseCase', () => {
       expect(error.errorCode).toBe('CONCURRENT_MODIFICATION');
       expect(repository.current.status).toBe('PROCESSING');
       expect(repository.issued).toBeUndefined();
-      // El intento sí ocurrió: queda en la bitácora aunque no haya cambiado el estado.
+      // The attempt did happen: it stays in the log even though the status did not change.
       expect(repository.attempts).toHaveLength(1);
     });
 

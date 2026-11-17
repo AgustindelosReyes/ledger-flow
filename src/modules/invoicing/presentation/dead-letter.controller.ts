@@ -195,8 +195,8 @@ export class DeadLetterController {
   async retry(
     @Param('invoiceId', new ParseUUIDPipe()) invoiceId: string,
     @CorrelationId() requestCorrelationId: string,
-    // El tipo debe ser la clase (no una unión): es el metadato con el que el ValidationPipe
-    // decide qué validar. Sin cuerpo en el request, el pipe entrega un DTO vacío.
+    // The type must be the class (not a union): it is the metadata the ValidationPipe uses to
+    // decide what to validate. With no request body, the pipe hands over an empty DTO.
     @Body() body: RetryDeadLetterDto,
   ): Promise<RetryAcceptedDto> {
     const result = await this.retryDeadLetteredInvoice.execute({

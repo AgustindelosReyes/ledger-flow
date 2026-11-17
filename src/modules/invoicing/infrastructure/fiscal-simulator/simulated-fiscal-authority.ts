@@ -20,9 +20,10 @@ const CAE_VALIDITY_DAYS = 10;
 const MS_PER_DAY = 86_400_000;
 
 /**
- * Simulador del ente fiscal (ARCA/AFIP): latencia variable, fallas transitorias inyectadas
- * y rechazos deterministas por datos inválidos. Reemplazable por un cliente real del
- * web service sin tocar el resto del sistema: solo implementa el puerto `FiscalAuthority`.
+ * Simulator of the fiscal authority (ARCA/AFIP): variable latency, injected transient
+ * faults and deterministic rejections for invalid data. It can be replaced by a real
+ * client of the web service without touching the rest of the system: it only implements
+ * the `FiscalAuthority` port.
  */
 export class SimulatedFiscalAuthority extends FiscalAuthority {
   constructor(
@@ -65,7 +66,7 @@ export class SimulatedFiscalAuthority extends FiscalAuthority {
     return authorization;
   }
 
-  /** Validaciones del ente: un rechazo es definitivo, reintentar no cambia el resultado. */
+  /** Authority-side validations: a rejection is final, retrying does not change it. */
   private validate(request: FiscalAuthorizationRequest): void {
     if (request.type === 'A' && (request.payerTaxId === null || !isValidCuit(request.payerTaxId))) {
       throw new FiscalRejectionError(
@@ -82,13 +83,13 @@ export class SimulatedFiscalAuthority extends FiscalAuthority {
     try {
       await sleep(latency, undefined, { signal });
     } catch {
-      // El cliente abortó por timeout: no hay nada más que responder.
+      // The client aborted on timeout: there is nothing left to respond.
       await hang(signal);
     }
   }
 }
 
-/** Nunca responde: la promesa solo se rechaza cuando el cliente aborta la solicitud. */
+/** Never responds: the promise only rejects when the client aborts the request. */
 function hang(signal: AbortSignal): Promise<never> {
   return new Promise<never>((_resolve, reject) => {
     const abort = (): void => {

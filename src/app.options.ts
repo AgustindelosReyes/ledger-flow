@@ -1,8 +1,8 @@
 import type { NestApplicationOptions } from '@nestjs/common';
 
 /**
- * Opciones de creación compartidas por `main.ts` y los tests e2e.
- * `rawBody` conserva los bytes exactos del request, necesarios para verificar la firma HMAC.
+ * Creation options shared by `main.ts` and the e2e tests.
+ * `rawBody` keeps the exact bytes of the request, required to verify the HMAC signature.
  */
 export const APP_OPTIONS = {
   rawBody: true,

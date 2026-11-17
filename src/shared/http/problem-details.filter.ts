@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import { correlationIdOf } from './correlation-id.js';
 import { PROBLEM_CONTENT_TYPE, toProblem, type Problem } from './problem-details.js';
 
-/** Filtro global: toda respuesta de error sale como `application/problem+json` (RFC 7807). */
+/** Global filter: every error response is sent as `application/problem+json` (RFC 7807). */
 @Catch()
 export class ProblemDetailsFilter implements ExceptionFilter {
   private readonly logger = new Logger(ProblemDetailsFilter.name);

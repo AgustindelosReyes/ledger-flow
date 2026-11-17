@@ -16,7 +16,7 @@ describe('POST /webhooks/payments (e2e)', () => {
     await t.close();
   });
 
-  /** Cuenta todo lo que un evento pudo haber escrito, en las seis tablas de la transacción. */
+  /** Counts everything an event could have written, across the six transaction tables. */
   async function countRecords(eventId: string, paymentId: string): Promise<Record<string, number>> {
     const payment = { externalPaymentId: paymentId };
     const [events, payments, ledgerTransactions, ledgerEntries, invoices, outboxEvents] =
@@ -149,7 +149,7 @@ describe('POST /webhooks/payments (e2e)', () => {
       const outcomes = acks.map((ack) => ack.status).sort();
       expect(outcomes).toEqual(['accepted', 'duplicate', 'duplicate', 'duplicate', 'duplicate']);
 
-      // Las cinco respuestas referencian la misma operación.
+      // All five responses reference the same operation.
       const paymentIds = new Set(acks.map((ack) => ack.paymentId));
       const invoiceIds = new Set(acks.map((ack) => ack.invoiceId));
       expect(paymentIds.size).toBe(1);
@@ -210,7 +210,7 @@ describe('POST /webhooks/payments (e2e)', () => {
       expect(problem.detail).toContain(event.eventId);
       expect(problem.correlationId).toBe(response.headers['x-correlation-id']);
 
-      // El evento original queda intacto y nada se duplicó.
+      // The original event is untouched and nothing was duplicated.
       expect(await countRecords(event.eventId, event.data.paymentId)).toEqual(ONE_OF_EACH);
       const payment = await t.prisma.payment.findFirstOrThrow({
         where: { externalPaymentId: event.data.paymentId },
@@ -237,7 +237,7 @@ describe('POST /webhooks/payments (e2e)', () => {
         .expect('content-type', PROBLEM_JSON);
 
       expect(problemOf(response).type).toBe('/problems/payment-already-recorded');
-      // Atomicidad: el rollback también descarta el evento que se había insertado primero.
+      // Atomicity: the rollback also discards the event that had been inserted first.
       expect(await t.prisma.webhookEvent.count({ where: { eventId: other.eventId } })).toBe(0);
       expect(await countRecords(original.eventId, original.data.paymentId)).toEqual(ONE_OF_EACH);
     });
@@ -272,8 +272,8 @@ describe('POST /webhooks/payments (e2e)', () => {
   describe('signature verification', () => {
     it('verifies the HMAC against the raw bytes, not a re-serialization of the JSON', async () => {
       const event = buildPaymentEvent();
-      // Claves en otro orden y con espaciado irregular: JSON.stringify(req.body) no
-      // reproduciría estos bytes, así que solo verificar sobre el rawBody puede aceptarlo.
+      // Keys in a different order and irregular spacing: JSON.stringify(req.body) would not
+      // reproduce these bytes, so only verifying against the rawBody can accept it.
       const rawBody = `{ "data" : ${JSON.stringify(event.data, null, 4)},\n\t"type":"${event.type}",   "provider": "${event.provider}", "eventId":"${event.eventId}" }`;
 
       await t.sendWebhook(rawBody).expect(202);
@@ -376,7 +376,7 @@ describe('GET /ledger/balances (e2e)', () => {
   });
 
   it('derives balances from entries, with total debits equal to total credits', async () => {
-    // XTS es el código ISO 4217 reservado para pruebas: aísla estos saldos del resto.
+    // XTS is the ISO 4217 code reserved for testing: it isolates these balances.
     const event = buildPaymentEvent({ provider: 'STRIPE' });
     event.data.amount = '121.00';
     event.data.currency = 'XTS';
@@ -395,7 +395,7 @@ describe('GET /ledger/balances (e2e)', () => {
       'VAT_PAYABLE',
     ]);
 
-    // Centavos como BigInt: la verificación tampoco usa aritmética de punto flotante.
+    // Cents as BigInt: the check does not use floating-point arithmetic either.
     const cents = (amount: string): bigint => BigInt(amount.replace('.', ''));
     const total = (column: 'debits' | 'credits'): bigint =>
       xts.reduce((sum, row) => sum + cents(row[column]), 0n);

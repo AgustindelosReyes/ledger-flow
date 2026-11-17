@@ -14,7 +14,7 @@ export class InvalidWebhookPayloadError extends DomainError {
   readonly code = 'INVALID_WEBHOOK_PAYLOAD';
 }
 
-/** La clave de idempotencia ya fue usada con un cuerpo distinto: no es un reintento legítimo. */
+/** The idempotency key was already used with a different body: not a legitimate retry. */
 export class IdempotencyPayloadMismatchError extends DomainError {
   readonly code = 'IDEMPOTENCY_PAYLOAD_MISMATCH';
 
@@ -26,7 +26,7 @@ export class IdempotencyPayloadMismatchError extends DomainError {
   }
 }
 
-/** Un evento distinto intenta registrar un pago que ya fue contabilizado. */
+/** A different event tries to record a payment that has already been booked. */
 export class PaymentAlreadyRecordedError extends DomainError {
   readonly code = 'PAYMENT_ALREADY_RECORDED';
 

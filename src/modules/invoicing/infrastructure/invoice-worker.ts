@@ -20,12 +20,12 @@ import {
 } from '../invoice-queue.js';
 
 /**
- * Adaptador entre BullMQ y el caso de uso de emisión. Traduce el resultado del intento al
- * lenguaje de la cola:
+ * Adapter between BullMQ and the issuance use case. It translates the outcome of the
+ * attempt into the language of the queue:
  *
- *  - error transitorio  -> se relanza; BullMQ reintenta con backoff exponencial.
- *  - error permanente   -> `UnrecoverableError`; falla definitiva sin gastar reintentos.
- *  - falla definitiva   -> además se publica la entrada en la Dead Letter Queue.
+ *  - transient error   -> rethrown; BullMQ retries with exponential backoff.
+ *  - permanent error   -> `UnrecoverableError`; fails for good without burning retries.
+ *  - permanent failure -> the entry is also published to the Dead Letter Queue.
  */
 @Injectable()
 export class InvoiceWorker implements OnApplicationBootstrap, OnModuleDestroy {
@@ -54,8 +54,8 @@ export class InvoiceWorker implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /**
-   * Apagado ordenado: deja de tomar jobs y espera a que terminen los que están en curso.
-   * Ocurre en la primera fase del apagado, cuando Postgres y Redis siguen disponibles.
+   * Graceful shutdown: stops taking jobs and waits for the ones in progress to finish. It
+   * happens in the first shutdown phase, while Postgres and Redis are still available.
    */
   async onModuleDestroy(): Promise<void> {
     await this.worker?.close();
@@ -66,8 +66,8 @@ export class InvoiceWorker implements OnApplicationBootstrap, OnModuleDestroy {
     if (!data.success) {
       return Promise.reject(new UnrecoverableError('Malformed issue-invoice job payload'));
     }
-    // Contexto de logging del job: toda línea emitida mientras se procesa, en cualquier
-    // capa, lleva el correlationId del webhook que originó la operación.
+    // Logging context of the job: every line emitted while it is processed, in any layer,
+    // carries the correlationId of the webhook that started the operation.
     return this.pino.runInContext(() => this.process(job, data.data), {
       bindings: {
         correlationId: data.data.correlationId,
@@ -93,8 +93,8 @@ export class InvoiceWorker implements OnApplicationBootstrap, OnModuleDestroy {
       });
 
       if (result.outcome === 'dead_lettered') {
-        // Reentrega de un job cuya factura ya había sido dada por perdida (el proceso murió
-        // entre marcarla y terminar el job): se asegura la entrada en la DLQ y se cierra.
+        // Redelivery of a job whose invoice had already been given up on (the process died
+        // between marking it and finishing the job): ensure the DLQ entry exists and close it.
         await this.deadLetters.put({
           ...data,
           sourceJobId: jobId,

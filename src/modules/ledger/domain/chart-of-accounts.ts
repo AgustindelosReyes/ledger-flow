@@ -1,6 +1,6 @@
 import type { PaymentProvider } from '../../../shared/domain/payment-provider.js';
 
-/** Códigos del plan de cuentas. Deben coincidir con los sembrados por migración. */
+/** Chart of accounts codes. They must match the ones seeded by migration. */
 export const AccountCode = {
   GATEWAY_RECEIVABLE_MERCADOPAGO: 'GATEWAY_RECEIVABLE_MERCADOPAGO',
   GATEWAY_RECEIVABLE_STRIPE: 'GATEWAY_RECEIVABLE_STRIPE',
@@ -15,7 +15,7 @@ const GATEWAY_RECEIVABLE_BY_PROVIDER: Record<PaymentProvider, AccountCode> = {
   STRIPE: AccountCode.GATEWAY_RECEIVABLE_STRIPE,
 };
 
-/** Cuenta de activo donde se registra lo que la pasarela nos debe liquidar. */
+/** Asset account that records what the gateway owes us in settlements. */
 export function gatewayReceivableAccount(provider: PaymentProvider): AccountCode {
   return GATEWAY_RECEIVABLE_BY_PROVIDER[provider];
 }

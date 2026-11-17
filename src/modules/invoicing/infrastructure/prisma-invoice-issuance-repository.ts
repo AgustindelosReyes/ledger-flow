@@ -45,9 +45,9 @@ export class PrismaInvoiceIssuanceRepository extends InvoiceIssuanceRepository {
   }
 
   async claim(invoice: InvoiceSnapshot): Promise<InvoiceSnapshot | null> {
-    // Bloqueo optimista: el UPDATE solo aplica si nadie cambió la fila desde que se leyó.
-    // PROCESSING también es reclamable: es el estado en que queda la factura si el proceso
-    // que la tenía murió, y BullMQ reentrega ese job ("stalled").
+    // Optimistic locking: the UPDATE only applies if nobody changed the row since it was read.
+    // PROCESSING can also be claimed: it is the state an invoice is left in when the process
+    // holding it died, and BullMQ redelivers that job ("stalled").
     const { count } = await this.prisma.invoice.updateMany({
       where: {
         id: invoice.id,
@@ -92,7 +92,7 @@ export class PrismaInvoiceIssuanceRepository extends InvoiceIssuanceRepository {
           version: { increment: 1 },
         },
       });
-      // Si se perdió la carrera, el intento queda igualmente en la bitácora.
+      // If the race was lost, the attempt still stays in the log.
       return count === 1;
     });
   }
@@ -153,14 +153,14 @@ export class PrismaInvoiceIssuanceRepository extends InvoiceIssuanceRepository {
         },
       });
       if (count === 0) {
-        // Otra solicitud de reencolado ganó la carrera entre la lectura y el UPDATE.
+        // Another requeue request won the race between the read and the UPDATE.
         return { kind: 'not_dead_lettered', status: 'PENDING' };
       }
 
       let applied: AppliedCorrection | null = null;
       if (correction !== undefined) {
-        // El pago es la proyección que lee el worker; el payload original del webhook queda
-        // intacto en `webhook_events` como evidencia de lo que envió la pasarela.
+        // The payment is the projection the worker reads; the original webhook payload stays
+        // untouched in `webhook_events` as evidence of what the gateway sent.
         await tx.payment.update({
           where: { id: invoice.paymentId },
           data: { payerTaxId: correction.payerTaxId },
@@ -217,7 +217,7 @@ export class PrismaInvoiceIssuanceRepository extends InvoiceIssuanceRepository {
     return {
       invoiceId: claimed.id,
       jobId: attempt.jobId,
-      // Numeración propia de la factura: sigue creciendo a través de reencolados manuales.
+      // Numbering owned by the invoice: it keeps growing across manual requeues.
       attemptNumber: claimed.attemptCount,
       durationMs: attempt.durationMs,
       httpStatus: attempt.httpStatus,

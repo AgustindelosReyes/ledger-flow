@@ -24,7 +24,7 @@ export interface Problem {
   readonly errors?: readonly FieldError[];
 }
 
-/** RFC 7807 Problem Details, con `correlationId` y `errors` como miembros de extensión. */
+/** RFC 7807 Problem Details, with `correlationId` and `errors` as extension members. */
 export class ProblemDetails implements Problem {
   @ApiProperty({
     description: 'URI reference that identifies the problem type',
@@ -60,8 +60,8 @@ interface DomainProblem {
 }
 
 /**
- * Traducción de errores de dominio a HTTP. Vive en la capa de presentación para que el
- * dominio no conozca códigos de estado.
+ * Translation of domain errors to HTTP. It lives in the presentation layer so that the
+ * domain knows nothing about status codes.
  */
 const DOMAIN_PROBLEMS: Readonly<Record<string, DomainProblem>> = {
   INVALID_WEBHOOK_SIGNATURE: {
@@ -105,7 +105,7 @@ function titleFor(status: number): string {
   return STATUS_CODES[status] ?? 'Error';
 }
 
-/** Errores estilo `http-errors` que emite el body-parser (JSON malformado, cuerpo excesivo). */
+/** `http-errors` style errors raised by the body parser (malformed JSON, oversized body). */
 function clientErrorStatus(exception: unknown): number | undefined {
   if (typeof exception !== 'object' || exception === null || !('statusCode' in exception)) {
     return undefined;
@@ -152,7 +152,7 @@ export function toProblem(exception: unknown): Problem {
     };
   }
 
-  // Nunca se filtran detalles internos (mensajes de la base, stack traces) al cliente.
+  // Internal details (database messages, stack traces) are never leaked to the client.
   return {
     type: 'about:blank',
     title: titleFor(HttpStatus.INTERNAL_SERVER_ERROR),

@@ -90,7 +90,7 @@ export class WebhooksController {
       },
     });
 
-    // 202: el pago quedó contabilizado, pero la factura se emite de forma asíncrona.
+    // 202: the payment is booked, but the invoice is issued asynchronously.
     response.status(result.status === 'accepted' ? HttpStatus.ACCEPTED : HttpStatus.OK);
     return { ...result, correlationId };
   }

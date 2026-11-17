@@ -13,16 +13,16 @@ export class CurrencyMismatchError extends DomainError {
   }
 }
 
-/** Decimales de la unidad mínima. Todas las monedas soportadas usan centavos. */
+/** Decimal places of the minor unit. Every supported currency uses cents. */
 const MINOR_UNIT_SCALE = 2;
 const AMOUNT_PATTERN = /^\d+(\.\d+)?$/;
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
 
 /**
- * Importe monetario no negativo con aritmética decimal exacta.
+ * Non-negative monetary amount with exact decimal arithmetic.
  *
- * Solo se construye desde strings: así es imposible que un `number` de JavaScript (binario,
- * con error de representación) entre en un cálculo de dinero.
+ * It can only be built from strings: that makes it impossible for a JavaScript `number`
+ * (binary, with representation error) to enter a money calculation.
  */
 export class Money {
   private constructor(
@@ -50,7 +50,7 @@ export class Money {
     return Money.of('0', currency);
   }
 
-  /** Representación canónica con escala fija, p. ej. `"1210.50"`. */
+  /** Canonical representation with a fixed scale, e.g. `"1210.50"`. */
   get amount(): string {
     return this.value.toFixed(MINOR_UNIT_SCALE);
   }
@@ -84,8 +84,8 @@ export class Money {
   }
 
   /**
-   * Divide por un factor decimal positivo y redondea a la unidad mínima con redondeo
-   * bancario (half-even), que no introduce sesgo acumulado.
+   * Divides by a positive decimal factor and rounds to the minor unit with banker's
+   * rounding (half-even), which introduces no cumulative bias.
    */
   divide(divisor: string): Money {
     if (!AMOUNT_PATTERN.test(divisor) || new Decimal(divisor).isZero()) {

@@ -8,7 +8,7 @@ export interface RedisConnectionOptions {
   readonly password?: string;
 }
 
-/** Opciones de conexión compartidas por las colas, el worker y el simulador fiscal. */
+/** Connection options shared by the queues, the worker and the fiscal simulator. */
 export function redisConnectionOptions(config: ConfigService<Env, true>): RedisConnectionOptions {
   const password = config.get('REDIS_PASSWORD', { infer: true });
   return {
