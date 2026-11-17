@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch or pull request supersedes the run in progress.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint, build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ledgerflow
+          POSTGRES_PASSWORD: ledgerflow
+          POSTGRES_DB: ledgerflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ledgerflow -d ledgerflow"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    # Throwaway values for the ephemeral service containers of this job; not real secrets.
+    # The e2e suite derives its own database (ledgerflow_test) and uses Redis database 15.
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://ledgerflow:ledgerflow@localhost:5432/ledgerflow?schema=public
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
+      WEBHOOK_SIGNING_SECRET: ci-only-webhook-signing-secret-0123456789abcdef
+      ADMIN_API_KEY: ci-only-admin-api-key-0123456789abcdef
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Installs the pnpm version pinned in the `packageManager` field of package.json.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate the Prisma client
+        run: pnpm prisma:generate
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+
+      - name: Unit tests
+        run: pnpm test
+
+      # Creates and migrates the test database, then runs against the service containers.
+      - name: End-to-end tests
+        run: pnpm test:e2e

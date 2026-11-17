@@ -655,6 +655,10 @@ What the suites cover:
 
 Failures of the fiscal authority are scripted per test through an injectable `FaultInjector`, so the asynchronous scenarios are deterministic.
 
+### Continuous integration
+
+Every push to `main` and every pull request runs [.github/workflows/ci.yml](.github/workflows/ci.yml) on GitHub Actions. The job starts PostgreSQL and Redis as service containers, installs dependencies with a frozen lockfile, generates the Prisma client and then runs the formatting check, `pnpm lint`, `pnpm build`, `pnpm test` and `pnpm test:e2e`. The end-to-end suite runs against those real services, exactly as it does locally.
+
 ## Configuration
 
 All variables are validated at startup. The complete, documented list is in [.env.example](.env.example); the most relevant ones:
@@ -710,4 +714,3 @@ Deliberate boundaries of the current scope:
 - **`FAILED` outbox events have no admin endpoint.** They are logged and visible in the operation trace, but re-publishing one requires a manual update.
 - **Balances are computed on demand.** Periodic snapshots would be needed at high volume.
 - **Observability stops at structured logs.** Metrics (queue depth, attempt latency, DLQ size) and distributed tracing are natural next steps.
-- **No CI pipeline yet.** `lint`, `build`, unit and end-to-end suites are run locally.
